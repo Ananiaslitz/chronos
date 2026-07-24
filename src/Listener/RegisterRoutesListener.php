@@ -31,14 +31,16 @@ class RegisterRoutesListener implements ListenerInterface
             ? config('chronos.route_prefix', '/chronos')
             : '/chronos';
 
-        Router::addGroup($prefix, function () {
-            Router::get('', [DashboardController::class, 'index']);
-            Router::get('/api/stats', [ApiController::class, 'stats']);
-            Router::get('/api/jobs', [ApiController::class, 'jobs']);
-            Router::get('/api/jobs/{id}', [ApiController::class, 'show']);
-            Router::post('/api/jobs/{id}/retry', [ApiController::class, 'retry']);
-            Router::delete('/api/jobs/{id}', [ApiController::class, 'delete']);
-            Router::delete('/api/jobs/failed/all', [ApiController::class, 'clearFailed']);
+        Router::addServer('http', function () use ($prefix) {
+            Router::addGroup($prefix, function () {
+                Router::get('', [DashboardController::class, 'index']);
+                Router::get('/api/stats', [ApiController::class, 'stats']);
+                Router::get('/api/jobs', [ApiController::class, 'jobs']);
+                Router::get('/api/jobs/{id}', [ApiController::class, 'show']);
+                Router::post('/api/jobs/{id}/retry', [ApiController::class, 'retry']);
+                Router::delete('/api/jobs/{id}', [ApiController::class, 'delete']);
+                Router::delete('/api/jobs/failed/all', [ApiController::class, 'clearFailed']);
+            });
         });
     }
 }
