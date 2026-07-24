@@ -121,38 +121,42 @@
 
             <!-- Jobs Table -->
             <div class="overflow-x-auto">
-                <table class="w-full text-left text-sm text-slate-300">
+                <table class="w-full text-left text-sm text-slate-300 border-collapse">
                     <thead class="bg-slate-950/50 text-xs uppercase text-slate-400 font-mono border-b border-slate-800">
                         <tr>
-                            <th class="px-6 py-3">Job ID</th>
-                            <th class="px-6 py-3">Trace ID</th>
-                            <th class="px-6 py-3">Class</th>
-                            <th class="px-6 py-3">Queue</th>
-                            <th class="px-6 py-3">Status</th>
-                            <th class="px-6 py-3">Duration</th>
-                            <th class="px-6 py-3">Time</th>
-                            <th class="px-6 py-3 text-right">Actions</th>
+                            <th class="px-4 py-3 font-semibold">Job ID</th>
+                            <th class="px-4 py-3 font-semibold">Trace ID</th>
+                            <th class="px-4 py-3 font-semibold">Class</th>
+                            <th class="px-4 py-3 font-semibold">Queue</th>
+                            <th class="px-4 py-3 font-semibold">Status</th>
+                            <th class="px-4 py-3 font-semibold">Duration</th>
+                            <th class="px-4 py-3 font-semibold">Time</th>
+                            <th class="px-4 py-3 text-right font-semibold">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-800/60">
                         <template x-if="jobs.length === 0">
                             <tr>
-                                <td colspan="8" class="px-6 py-12 text-center text-slate-500">
+                                <td colspan="8" class="px-4 py-12 text-center text-slate-500">
                                     No <span x-text="activeTab"></span> jobs found in storage.
                                 </td>
                             </tr>
                         </template>
                         <template x-for="job in jobs" :key="job.id">
                             <tr class="hover:bg-slate-800/40 transition">
-                                <td class="px-6 py-4 font-mono text-xs text-indigo-300" x-text="job.id"></td>
-                                <td class="px-6 py-4 font-mono text-xs">
-                                    <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[11px]" x-text="job.trace_id || '-'"></span>
+                                <td class="px-4 py-3 font-mono text-xs text-indigo-300">
+                                    <span class="block truncate max-w-[110px]" :title="job.id" x-text="job.id"></span>
                                 </td>
-                                <td class="px-6 py-4 font-medium text-white truncate max-w-xs" x-text="job.job_class"></td>
-                                <td class="px-6 py-4">
+                                <td class="px-4 py-3 font-mono text-xs">
+                                    <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[11px] inline-block truncate max-w-[140px]" :title="job.trace_id" x-text="job.trace_id || '-'"></span>
+                                </td>
+                                <td class="px-4 py-3 font-medium text-white">
+                                    <span class="block truncate max-w-[200px]" :title="job.job_class" x-text="job.job_class"></span>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap">
                                     <span class="px-2 py-1 rounded bg-slate-800 text-xs font-mono text-slate-300" x-text="job.queue || 'default'"></span>
                                 </td>
-                                <td class="px-6 py-4">
+                                <td class="px-4 py-3 whitespace-nowrap">
                                     <span :class="{
                                         'bg-emerald-500/10 text-emerald-400 border-emerald-500/20': job.status === 'completed',
                                         'bg-rose-500/10 text-rose-400 border-rose-500/20': job.status === 'failed',
@@ -160,9 +164,9 @@
                                         'bg-violet-500/10 text-violet-400 border-violet-500/20': job.status === 'retried'
                                     }" class="px-2.5 py-0.5 rounded-full text-xs font-semibold border" x-text="job.status"></span>
                                 </td>
-                                <td class="px-6 py-4 font-mono text-xs" x-text="job.duration_ms ? job.duration_ms + ' ms' : '-'"></td>
-                                <td class="px-6 py-4 text-xs text-slate-400" x-text="formatTime(job.created_at)"></td>
-                                <td class="px-6 py-4 text-right space-x-2">
+                                <td class="px-4 py-3 font-mono text-xs whitespace-nowrap" x-text="job.duration_ms ? job.duration_ms + ' ms' : '-'"></td>
+                                <td class="px-4 py-3 text-xs text-slate-400 whitespace-nowrap" x-text="formatTime(job.created_at)"></td>
+                                <td class="px-4 py-3 text-right space-x-2 whitespace-nowrap">
                                     <button @click="openModal(job)" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded-lg text-slate-200 transition">
                                         Inspect
                                     </button>
