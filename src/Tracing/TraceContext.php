@@ -54,10 +54,16 @@ class TraceContext
     {
         $traceId = self::getTraceId();
         if (! empty($traceId)) {
-            try {
+            if (property_exists($job, 'chronos_trace_id')) {
+                $job->chronos_trace_id = $traceId;
+            } elseif (property_exists($job, '__chronos_trace_id')) {
                 $job->__chronos_trace_id = $traceId;
-            } catch (\Throwable $e) {
-                // Ignore if dynamic property not supported
+            } else {
+                try {
+                    @$job->chronos_trace_id = $traceId;
+                } catch (\Throwable $e) {
+                    // Ignore
+                }
             }
         }
 
