@@ -8,6 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Alpine.js CDN -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -100,30 +102,70 @@
             </div>
         </div>
 
+        <!-- Real-Time Chart Section -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+            <div class="flex items-center justify-between mb-3">
+                <div>
+                    <h3 class="text-xs uppercase font-mono font-bold text-slate-400 tracking-wider">Real-Time Throughput & Execution Trend</h3>
+                    <p class="text-xs text-slate-500 font-mono">Live completed vs failed job throughput timeline</p>
+                </div>
+                <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs font-mono">Chart.js Live</span>
+            </div>
+            <div class="h-44 w-full">
+                <canvas id="chronosChart"></canvas>
+            </div>
+        </div>
+
         <!-- Table Controls & Tabs -->
-        <div class="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
-            <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between flex-wrap gap-4">
+        <div class="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-xl space-y-3">
+            <div class="px-6 py-4 border-b border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div class="flex space-x-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
-                    <button @click="activeTab = 'recent'; fetchData()" :class="activeTab === 'recent' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'" class="px-4 py-1.5 text-xs font-semibold rounded-lg transition">
+                    <button @click="activeTab = 'recent'; selectedIds = []; fetchData()" :class="activeTab === 'recent' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'" class="px-4 py-1.5 text-xs font-semibold rounded-lg transition">
                         Recent Jobs
                     </button>
-                    <button @click="activeTab = 'failed'; fetchData()" :class="activeTab === 'failed' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'" class="px-4 py-1.5 text-xs font-semibold rounded-lg transition">
+                    <button @click="activeTab = 'failed'; selectedIds = []; fetchData()" :class="activeTab === 'failed' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'" class="px-4 py-1.5 text-xs font-semibold rounded-lg transition">
                         Failed Jobs
                     </button>
                 </div>
 
-                <div x-show="activeTab === 'failed' && jobs.length > 0">
-                    <button @click="clearAllFailed()" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition">
-                        Clear All Failed
-                    </button>
+                <div class="flex items-center space-x-3 w-full sm:w-auto">
+                    <!-- Search Input -->
+                    <div class="relative w-full sm:w-72">
+                        <input type="text" x-model="searchQuery" placeholder="Search class, trace, tag, or ID..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 pl-9 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition font-mono">
+                        <svg class="w-4 h-4 text-slate-500 absolute left-3 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+
+                    <template x-if="activeTab === 'failed' && jobs.length > 0">
+                        <button @click="clearAllFailed()" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition shrink-0">
+                            Clear All Failed
+                        </button>
+                    </template>
                 </div>
             </div>
+
+            <!-- Floating Batch Actions Bar -->
+            <template x-if="selectedIds.length > 0">
+                <div class="mx-6 p-3 bg-indigo-950/60 border border-indigo-800/50 rounded-xl flex items-center justify-between font-mono text-xs text-indigo-200">
+                    <span x-text="selectedIds.length + ' item(s) selected'"></span>
+                    <div class="flex space-x-2">
+                        <button @click="batchRetrySelected()" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition font-semibold">
+                            Retry Selected (<span x-text="selectedIds.length"></span>)
+                        </button>
+                        <button @click="batchDeleteSelected()" class="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition font-semibold">
+                            Delete Selected (<span x-text="selectedIds.length"></span>)
+                        </button>
+                    </div>
+                </div>
+            </template>
 
             <!-- Jobs Table -->
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-sm text-slate-300 border-collapse">
                     <thead class="bg-slate-950/50 text-xs uppercase text-slate-400 font-mono border-b border-slate-800">
                         <tr>
+                            <th class="px-3 py-3 w-8 text-center">
+                                <input type="checkbox" @change="toggleSelectAll()" :checked="isAllSelected()" class="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0 cursor-pointer">
+                            </th>
                             <th class="px-4 py-3 font-semibold">Job ID</th>
                             <th class="px-4 py-3 font-semibold">Trace ID</th>
                             <th class="px-4 py-3 font-semibold">Class</th>
@@ -135,15 +177,18 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-800/60">
-                        <template x-if="jobs.length === 0">
+                        <template x-if="filteredJobs.length === 0">
                             <tr>
-                                <td colspan="8" class="px-4 py-12 text-center text-slate-500">
-                                    No <span x-text="activeTab"></span> jobs found in storage.
+                                <td colspan="9" class="px-4 py-12 text-center text-slate-500">
+                                    No <span x-text="activeTab"></span> jobs matching filter.
                                 </td>
                             </tr>
                         </template>
-                        <template x-for="job in jobs" :key="job.id">
+                        <template x-for="job in filteredJobs" :key="job.id">
                             <tr class="hover:bg-slate-800/40 transition">
+                                <td class="px-3 py-3 text-center">
+                                    <input type="checkbox" :value="job.id" x-model="selectedIds" class="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0 cursor-pointer">
+                                </td>
                                 <td class="px-4 py-3 font-mono text-xs text-indigo-300">
                                     <span class="block truncate max-w-[110px]" :title="job.id" x-text="job.id"></span>
                                 </td>
@@ -322,10 +367,93 @@
                 modalOpen: false,
                 selectedJob: null,
                 traceJobs: [],
+                searchQuery: '',
+                selectedIds: [],
+                chart: null,
 
                 init() {
+                    this.initChart();
                     this.fetchData();
                     setInterval(() => this.fetchData(), 3000);
+                },
+
+                get filteredJobs() {
+                    if (!this.searchQuery) return this.jobs;
+                    const q = this.searchQuery.toLowerCase();
+                    return this.jobs.filter(job => {
+                        return (job.id && job.id.toLowerCase().includes(q))
+                            || (job.trace_id && job.trace_id.toLowerCase().includes(q))
+                            || (job.job_class && job.job_class.toLowerCase().includes(q))
+                            || (job.queue && job.queue.toLowerCase().includes(q))
+                            || (job.tags && job.tags.toLowerCase().includes(q))
+                            || (job.payload && job.payload.toLowerCase().includes(q));
+                    });
+                },
+
+                isAllSelected() {
+                    return this.filteredJobs.length > 0 && this.filteredJobs.every(j => this.selectedIds.includes(j.id));
+                },
+
+                toggleSelectAll() {
+                    if (this.isAllSelected()) {
+                        this.selectedIds = [];
+                    } else {
+                        this.selectedIds = this.filteredJobs.map(j => j.id);
+                    }
+                },
+
+                initChart() {
+                    const ctx = document.getElementById('chronosChart').getContext('2d');
+                    this.chart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: Array(10).fill(''),
+                            datasets: [
+                                {
+                                    label: 'Completed',
+                                    data: Array(10).fill(0),
+                                    borderColor: '#34d399',
+                                    backgroundColor: 'rgba(52, 211, 153, 0.1)',
+                                    fill: true,
+                                    tension: 0.4
+                                },
+                                {
+                                    label: 'Failed',
+                                    data: Array(10).fill(0),
+                                    borderColor: '#f87171',
+                                    backgroundColor: 'rgba(248, 113, 113, 0.1)',
+                                    fill: true,
+                                    tension: 0.4
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { labels: { color: '#94a3b8', font: { family: 'monospace', size: 11 } } }
+                            },
+                            scales: {
+                                x: { grid: { color: '#1e293b' }, ticks: { color: '#64748b' } },
+                                y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b' }, beginAtZero: true }
+                            }
+                        }
+                    });
+                },
+
+                updateChartData(completed, failed) {
+                    if (!this.chart) return;
+                    const nowLabel = new Date().toLocaleTimeString();
+                    this.chart.data.labels.push(nowLabel);
+                    this.chart.data.labels.shift();
+
+                    this.chart.data.datasets[0].data.push(completed);
+                    this.chart.data.datasets[0].data.shift();
+
+                    this.chart.data.datasets[1].data.push(failed);
+                    this.chart.data.datasets[1].data.shift();
+
+                    this.chart.update('quiet');
                 },
 
                 async fetchData() {
@@ -339,8 +467,13 @@
                         const statsData = await statsRes.json();
                         const jobsData = await jobsRes.json();
 
-                        if (statsData.status === 'success') this.stats = statsData.data;
-                        if (jobsData.status === 'success') this.jobs = jobsData.data;
+                        if (statsData.status === 'success') {
+                            this.stats = statsData.data;
+                            this.updateChartData(this.stats.completed || 0, this.stats.failed || 0);
+                        }
+                        if (jobsData.status === 'success') {
+                            this.jobs = jobsData.data;
+                        }
                     } catch (e) {
                         console.error('Chronos fetch error:', e);
                     } finally {
@@ -356,6 +489,41 @@
                         this.fetchData();
                     } catch (e) {
                         alert('Retry error: ' + e.message);
+                    }
+                },
+
+                async batchRetrySelected() {
+                    if (this.selectedIds.length === 0) return;
+                    try {
+                        const res = await fetch('/chronos/api/jobs/batch-retry', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ids: this.selectedIds })
+                        });
+                        const data = await res.json();
+                        alert(data.message || 'Selected jobs re-queued!');
+                        this.selectedIds = [];
+                        this.fetchData();
+                    } catch (e) {
+                        alert('Batch retry error: ' + e.message);
+                    }
+                },
+
+                async batchDeleteSelected() {
+                    if (this.selectedIds.length === 0) return;
+                    if (!confirm(`Delete ${this.selectedIds.length} selected job(s)?`)) return;
+                    try {
+                        const res = await fetch('/chronos/api/jobs/batch-delete', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ids: this.selectedIds })
+                        });
+                        const data = await res.json();
+                        alert(data.message || 'Selected jobs deleted!');
+                        this.selectedIds = [];
+                        this.fetchData();
+                    } catch (e) {
+                        alert('Batch delete error: ' + e.message);
                     }
                 },
 
