@@ -49,4 +49,18 @@ class TraceContext
         self::setTraceId($traceId);
         return $traceId;
     }
+
+    public static function propagate(object $job): object
+    {
+        $traceId = self::getTraceId();
+        if (! empty($traceId)) {
+            try {
+                $job->__chronos_trace_id = $traceId;
+            } catch (\Throwable $e) {
+                // Ignore if dynamic property not supported
+            }
+        }
+
+        return $job;
+    }
 }
