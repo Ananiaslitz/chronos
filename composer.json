@@ -1,5 +1,5 @@
 {
-    "name": "dhsa/chronos",
+    "name": "ananiaslitz/chronos",
     "description": "Real-time Queue Dashboard & Manager for Hyperf (Redis Async Queue)",
     "type": "library",
     "license": "MIT",
