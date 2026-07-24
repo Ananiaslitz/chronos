@@ -305,6 +305,20 @@ class RedisStorage
         return true;
     }
 
+    public function deleteJobs(array $jobIds): int
+    {
+        $redis = $this->redis();
+        $count = 0;
+        foreach ($jobIds as $jobId) {
+            $redis->del($this->prefix . 'job:' . $jobId);
+            $redis->zRem($this->prefix . 'recent_jobs', $jobId);
+            $redis->zRem($this->prefix . 'failed_jobs', $jobId);
+            $count++;
+        }
+
+        return $count;
+    }
+
     public function clearFailedJobs(): int
     {
         $redis = $this->redis();
