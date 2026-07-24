@@ -6,10 +6,15 @@ namespace Chronos\Controller;
 
 use Chronos\Storage\RedisStorage;
 use Hyperf\AsyncQueue\Driver\DriverFactory;
+use Hyperf\HttpServer\Annotation\Controller;
+use Hyperf\HttpServer\Annotation\DeleteMapping;
+use Hyperf\HttpServer\Annotation\GetMapping;
+use Hyperf\HttpServer\Annotation\PostMapping;
 use Hyperf\HttpServer\Contract\RequestInterface;
 use Hyperf\HttpServer\Contract\ResponseInterface;
 use Psr\Container\ContainerInterface;
 
+#[Controller(prefix: '/chronos/api')]
 class ApiController
 {
     public function __construct(
@@ -17,6 +22,7 @@ class ApiController
         protected ContainerInterface $container
     ) {}
 
+    #[GetMapping(path: 'stats')]
     public function stats(ResponseInterface $response)
     {
         return $response->json([
@@ -25,6 +31,7 @@ class ApiController
         ]);
     }
 
+    #[GetMapping(path: 'jobs')]
     public function jobs(RequestInterface $request, ResponseInterface $response)
     {
         $type = $request->input('type', 'recent');
@@ -42,6 +49,7 @@ class ApiController
         ]);
     }
 
+    #[GetMapping(path: 'jobs/{id}')]
     public function show(string $id, ResponseInterface $response)
     {
         $job = $this->storage->getJob($id);
@@ -59,6 +67,7 @@ class ApiController
         ]);
     }
 
+    #[PostMapping(path: 'jobs/{id}/retry')]
     public function retry(string $id, ResponseInterface $response)
     {
         $jobData = $this->storage->getJob($id);
@@ -80,7 +89,6 @@ class ApiController
                 $driver = $driverFactory->get($queueName);
 
                 if ($jobClass && class_exists($jobClass)) {
-                    // Re-instantiate job instance if possible
                     $jobInstance = new $jobClass(...array_values($payload));
                     $driver->push($jobInstance);
                 }
@@ -100,6 +108,7 @@ class ApiController
         }
     }
 
+    #[DeleteMapping(path: 'jobs/{id}')]
     public function delete(string $id, ResponseInterface $response)
     {
         $this->storage->deleteJob($id);
@@ -110,6 +119,7 @@ class ApiController
         ]);
     }
 
+    #[DeleteMapping(path: 'jobs/failed/all')]
     public function clearFailed(ResponseInterface $response)
     {
         $count = $this->storage->clearFailedJobs();

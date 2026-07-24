@@ -4,10 +4,7 @@ declare(strict_types=1);
 
 namespace Chronos;
 
-use Chronos\Controller\ApiController;
-use Chronos\Controller\DashboardController;
 use Chronos\Listener\JobEventListener;
-use Chronos\Listener\RegisterRoutesListener;
 
 class ConfigProvider
 {
@@ -17,7 +14,6 @@ class ConfigProvider
             'dependencies' => [],
             'listeners' => [
                 JobEventListener::class,
-                RegisterRoutesListener::class,
             ],
             'annotations' => [
                 'scan' => [
