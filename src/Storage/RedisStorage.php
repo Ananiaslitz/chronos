@@ -244,20 +244,43 @@ class RedisStorage
         return $jobs;
     }
 
+    public function recordTraceSpan(string $traceId, array $spanData): void
+    {
+        $now = microtime(true);
+        $redis = $this->redis();
+        $spanId = $spanData['id'] ?? ('span_' . bin2hex(random_bytes(4)));
+
+        $spanKey = $this->prefix . 'span:' . $spanId;
+        $redis->hMSet($spanKey, $spanData);
+        $redis->expire($spanKey, 86400 * 3);
+
+        $redis->zAdd($this->prefix . 'trace:' . $traceId, (float) $now, 'span:' . $spanId);
+        $redis->expire($this->prefix . 'trace:' . $traceId, 86400 * 3);
+    }
+
     public function getTraceJobs(string $traceId): array
     {
         $redis = $this->redis();
-        $jobIds = $redis->zRange($this->prefix . 'trace:' . $traceId, 0, -1) ?: [];
+        $items = $redis->zRange($this->prefix . 'trace:' . $traceId, 0, -1) ?: [];
 
-        $jobs = [];
-        foreach ($jobIds as $jobId) {
-            $jobData = $this->getJob($jobId);
-            if ($jobData) {
-                $jobs[] = $jobData;
+        $spans = [];
+        foreach ($items as $item) {
+            if (str_starts_with((string) $item, 'span:')) {
+                $spanId = substr((string) $item, 5);
+                $spanData = $redis->hGetAll($this->prefix . 'span:' . $spanId);
+                if ($spanData) {
+                    $spans[] = $spanData;
+                }
+            } else {
+                $jobData = $this->getJob((string) $item);
+                if ($jobData) {
+                    $jobData['type'] = 'job';
+                    $spans[] = $jobData;
+                }
             }
         }
 
-        return $jobs;
+        return $spans;
     }
 
     public function getJob(string $jobId): ?array
