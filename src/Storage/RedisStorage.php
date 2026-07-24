@@ -52,9 +52,7 @@ class RedisStorage
 
         $redis->hIncrBy($this->prefix . 'stats', 'total', 1);
         $redis->zAdd($this->prefix . 'recent_jobs', (int) ($now * 1000), $jobId);
-
-        // Trim recent jobs
-        $redis->zRemRangeByRank($this->prefix . 'recent_jobs', 0, -($this->recentLimit + 1));
+        $this->trimRecentJobs($redis);
     }
 
     public function recordSuccess(string $jobId, string $jobClass, string $queue, mixed $payload, float $durationMs): void
@@ -81,7 +79,7 @@ class RedisStorage
 
         $redis->hIncrBy($this->prefix . 'stats', 'completed', 1);
         $redis->zAdd($this->prefix . 'recent_jobs', (int) ($now * 1000), $jobId);
-        $redis->zRemRangeByRank($this->prefix . 'recent_jobs', 0, -($this->recentLimit + 1));
+        $this->trimRecentJobs($redis);
     }
 
     public function recordFailure(string $jobId, string $jobClass, string $queue, mixed $payload, Throwable $exception, float $durationMs): void
@@ -113,8 +111,24 @@ class RedisStorage
         $redis->zAdd($this->prefix . 'recent_jobs', (int) ($now * 1000), $jobId);
         $redis->zAdd($this->prefix . 'failed_jobs', (int) ($now * 1000), $jobId);
 
-        $redis->zRemRangeByRank($this->prefix . 'recent_jobs', 0, -($this->recentLimit + 1));
-        $redis->zRemRangeByRank($this->prefix . 'failed_jobs', 0, -($this->failedLimit + 1));
+        $this->trimRecentJobs($redis);
+        $this->trimFailedJobs($redis);
+    }
+
+    protected function trimRecentJobs($redis): void
+    {
+        $card = (int) $redis->zCard($this->prefix . 'recent_jobs');
+        if ($card > $this->recentLimit) {
+            $redis->zRemRangeByRank($this->prefix . 'recent_jobs', 0, $card - $this->recentLimit - 1);
+        }
+    }
+
+    protected function trimFailedJobs($redis): void
+    {
+        $card = (int) $redis->zCard($this->prefix . 'failed_jobs');
+        if ($card > $this->failedLimit) {
+            $redis->zRemRangeByRank($this->prefix . 'failed_jobs', 0, $card - $this->failedLimit - 1);
+        }
     }
 
     public function recordRetry(string $jobId): void
