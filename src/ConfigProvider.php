@@ -7,7 +7,8 @@ namespace Chronos;
 use Chronos\Controller\ApiController;
 use Chronos\Controller\DashboardController;
 use Chronos\Listener\JobEventListener;
-use Hyperf\HttpServer\Router\Router;
+use function Hyperf\Config\config;
+use function Hyperf\Support\config as support_config;
 
 class ConfigProvider
 {
@@ -15,7 +16,9 @@ class ConfigProvider
     {
         // Register HTTP Routes dynamically if Router class exists
         if (class_exists(Router::class)) {
-            $prefix = config('chronos.route_prefix', '/chronos');
+            $prefix = function_exists('Hyperf\Config\config') 
+                ? config('chronos.route_prefix', '/chronos') 
+                : (function_exists('config') ? \config('chronos.route_prefix', '/chronos') : '/chronos');
 
             Router::addGroup($prefix, function () {
                 Router::get('', [DashboardController::class, 'index']);
