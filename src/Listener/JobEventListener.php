@@ -11,6 +11,7 @@ use Hyperf\AsyncQueue\Event\FailedHandle;
 use Hyperf\AsyncQueue\Event\RetryHandle;
 use Hyperf\Event\Annotation\Listener;
 use Hyperf\Event\Contract\ListenerInterface;
+use Throwable;
 
 #[Listener]
 class JobEventListener implements ListenerInterface
@@ -46,17 +47,17 @@ class JobEventListener implements ListenerInterface
             } elseif ($event instanceof RetryHandle) {
                 $this->handleRetry($event);
             }
-        } catch (\Throwable $e) {
-            // Silently prevent Chronos internal storage errors from failing the application queue
+        } catch (Throwable $e) {
+            error_log('[Chronos Error] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
         }
     }
 
     protected function handleBefore(BeforeHandle $event): void
     {
-        $job = $event->getMessage()->job ?? $event->job ?? null;
+        $job = $this->getJob($event);
         $jobId = $this->getJobId($event);
         $jobClass = $job ? get_class($job) : 'UnknownJob';
-        $queue = method_exists($event->getMessage(), 'getQueue') ? $event->getMessage()->getQueue() : 'default';
+        $queue = 'default';
 
         $this->startTimes[$jobId] = microtime(true);
 
@@ -67,10 +68,10 @@ class JobEventListener implements ListenerInterface
 
     protected function handleAfter(AfterHandle $event): void
     {
-        $job = $event->getMessage()->job ?? $event->job ?? null;
+        $job = $this->getJob($event);
         $jobId = $this->getJobId($event);
         $jobClass = $job ? get_class($job) : 'UnknownJob';
-        $queue = method_exists($event->getMessage(), 'getQueue') ? $event->getMessage()->getQueue() : 'default';
+        $queue = 'default';
         $payload = method_exists($job, '__serialize') ? $job->__serialize() : (array) $job;
 
         $startTime = $this->startTimes[$jobId] ?? microtime(true);
@@ -83,10 +84,10 @@ class JobEventListener implements ListenerInterface
 
     protected function handleFailed(FailedHandle $event): void
     {
-        $job = $event->getMessage()->job ?? $event->job ?? null;
+        $job = $this->getJob($event);
         $jobId = $this->getJobId($event);
         $jobClass = $job ? get_class($job) : 'UnknownJob';
-        $queue = method_exists($event->getMessage(), 'getQueue') ? $event->getMessage()->getQueue() : 'default';
+        $queue = 'default';
         $payload = method_exists($job, '__serialize') ? $job->__serialize() : (array) $job;
 
         $startTime = $this->startTimes[$jobId] ?? microtime(true);
@@ -94,7 +95,9 @@ class JobEventListener implements ListenerInterface
 
         unset($this->startTimes[$jobId]);
 
-        $this->storage->recordFailure($jobId, $jobClass, $queue, $payload, $event->getThrowable(), $durationMs);
+        $throwable = property_exists($event, 'throwable') ? $event->throwable : new \Exception('Unknown job error');
+
+        $this->storage->recordFailure($jobId, $jobClass, $queue, $payload, $throwable, $durationMs);
     }
 
     protected function handleRetry(RetryHandle $event): void
@@ -103,15 +106,43 @@ class JobEventListener implements ListenerInterface
         $this->storage->recordRetry($jobId);
     }
 
+    protected function getMessage(object $event): ?object
+    {
+        if (property_exists($event, 'message') && $event->message) {
+            return $event->message;
+        }
+
+        if (method_exists($event, 'getMessage')) {
+            return $event->getMessage();
+        }
+
+        return null;
+    }
+
+    protected function getJob(object $event): ?object
+    {
+        $message = $this->getMessage($event);
+        if ($message && property_exists($message, 'job') && $message->job) {
+            return $message->job;
+        }
+
+        if (property_exists($event, 'job') && $event->job) {
+            return $event->job;
+        }
+
+        return null;
+    }
+
     protected function getJobId(object $event): string
     {
-        $message = method_exists($event, 'getMessage') ? $event->getMessage() : null;
+        $message = $this->getMessage($event);
 
         if ($message && method_exists($message, 'getId') && $message->getId()) {
             return (string) $message->getId();
         }
 
-        $job = $message ? ($message->job ?? null) : ($event->job ?? null);
+        $job = $this->getJob($event);
+
         if ($job && property_exists($job, 'id') && $job->id) {
             return (string) $job->id;
         }
