@@ -124,7 +124,9 @@ class JobEventListener implements ListenerInterface
     {
         $payload = $job && method_exists($job, '__serialize') ? $job->__serialize() : (array) $job;
         
-        $traceId = $payload['__chronos_trace_id'] ?? TraceContext::getTraceId();
+        $traceId = ($job ? ($job->chronos_trace_id ?? ($job->__chronos_trace_id ?? null)) : null)
+            ?? ($payload['chronos_trace_id'] ?? ($payload['__chronos_trace_id'] ?? TraceContext::getTraceId()));
+
         TraceContext::setTraceId($traceId);
 
         return [
@@ -146,7 +148,7 @@ class JobEventListener implements ListenerInterface
 
         foreach ($payload as $key => $val) {
             $cleanKey = ltrim(str_replace("\0*\0", '', (string) $key));
-            if ($cleanKey === '__chronos_trace_id') {
+            if (in_array($cleanKey, ['chronos_trace_id', '__chronos_trace_id'], true)) {
                 continue;
             }
             if (is_scalar($val) && strlen((string) $val) <= 100) {
