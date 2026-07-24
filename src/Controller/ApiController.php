@@ -121,6 +121,60 @@ class ApiController
         }
     }
 
+    #[PostMapping(path: 'jobs/batch-retry')]
+    public function batchRetry(RequestInterface $request, ResponseInterface $response)
+    {
+        $ids = (array) $request->input('ids', []);
+        $retried = 0;
+
+        foreach ($ids as $id) {
+            $jobData = $this->storage->getJob((string) $id);
+            if (! $jobData) {
+                continue;
+            }
+
+            try {
+                $queueName = $jobData['queue'] ?? 'default';
+                $jobClass = $jobData['job_class'] ?? null;
+                $payload = json_decode($jobData['payload'] ?? '[]', true);
+
+                if ($this->container->has(DriverFactory::class)) {
+                    $driverFactory = $this->container->get(DriverFactory::class);
+                    $driver = $driverFactory->get($queueName);
+
+                    if ($jobClass && class_exists($jobClass)) {
+                        $jobInstance = new $jobClass(...array_values($payload));
+                        $driver->push($jobInstance);
+                    }
+                }
+
+                $this->storage->recordRetry((string) $id);
+                $retried++;
+            } catch (\Throwable $e) {
+                // Ignore individual retry error
+            }
+        }
+
+        return $response->json([
+            'status' => 'success',
+            'message' => sprintf('Re-queued %d jobs for retry', $retried),
+            'retried_count' => $retried,
+        ]);
+    }
+
+    #[PostMapping(path: 'jobs/batch-delete')]
+    public function batchDelete(RequestInterface $request, ResponseInterface $response)
+    {
+        $ids = (array) $request->input('ids', []);
+        $count = $this->storage->deleteJobs($ids);
+
+        return $response->json([
+            'status' => 'success',
+            'message' => sprintf('Deleted %d jobs', $count),
+            'deleted_count' => $count,
+        ]);
+    }
+
     #[DeleteMapping(path: 'jobs/{id}')]
     public function delete(string $id, ResponseInterface $response)
     {
