@@ -182,13 +182,57 @@
         <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full p-6 space-y-6 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" @click.outside="modalOpen = false">
             <div class="flex items-center justify-between border-b border-slate-800 pb-4">
                 <div>
-                    <h3 class="text-lg font-bold text-white" x-text="selectedJob?.job_class"></h3>
-                    <p class="text-xs font-mono text-indigo-400" x-text="'ID: ' + selectedJob?.id"></p>
+                    <div class="flex items-center space-x-2">
+                        <h3 class="text-lg font-bold text-white" x-text="selectedJob?.job_class"></h3>
+                        <template x-if="selectedJob?.trace_id">
+                            <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs font-mono" x-text="selectedJob?.trace_id"></span>
+                        </template>
+                    </div>
+                    <p class="text-xs font-mono text-slate-400 mt-0.5" x-text="'ID: ' + selectedJob?.id"></p>
                 </div>
                 <button @click="modalOpen = false" class="text-slate-400 hover:text-white">&times;</button>
             </div>
 
-            <div class="overflow-y-auto space-y-4 flex-1">
+            <div class="overflow-y-auto space-y-5 flex-1">
+
+                <!-- System Diagnostics Grid -->
+                <div>
+                    <h4 class="text-xs uppercase font-mono font-bold text-slate-400 mb-2">System Diagnostics</h4>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div class="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                            <div class="text-[10px] font-mono text-slate-500 uppercase">Memory Peak</div>
+                            <div class="text-sm font-bold text-indigo-300 font-mono mt-0.5" x-text="selectedJob?.memory_peak_mb || '-'"></div>
+                        </div>
+                        <div class="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                            <div class="text-[10px] font-mono text-slate-500 uppercase">Queue Wait Time</div>
+                            <div class="text-sm font-bold text-amber-300 font-mono mt-0.5" x-text="selectedJob?.wait_time_ms ? selectedJob?.wait_time_ms + ' ms' : '-'"></div>
+                        </div>
+                        <div class="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                            <div class="text-[10px] font-mono text-slate-500 uppercase">Execution Time</div>
+                            <div class="text-sm font-bold text-emerald-300 font-mono mt-0.5" x-text="selectedJob?.duration_ms ? selectedJob?.duration_ms + ' ms' : '-'"></div>
+                        </div>
+                        <div class="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                            <div class="text-[10px] font-mono text-slate-500 uppercase">Worker Host / PID</div>
+                            <div class="text-xs font-semibold text-slate-300 font-mono mt-0.5 truncate" x-text="(selectedJob?.hostname || 'local') + ' (' + (selectedJob?.pid || '-') + ')'"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DTO Tags -->
+                <template x-if="selectedJob?.tags && parseTags(selectedJob?.tags).length > 0">
+                    <div>
+                        <h4 class="text-xs uppercase font-mono font-bold text-slate-400 mb-1.5">Context Tags</h4>
+                        <div class="flex flex-wrap gap-2">
+                            <template x-for="tag in parseTags(selectedJob?.tags)" :key="tag.key">
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono">
+                                    <span class="text-slate-500 mr-1" x-text="tag.key + ':'"></span>
+                                    <span class="text-indigo-300 font-semibold" x-text="tag.value"></span>
+                                </span>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
                 <!-- Payload -->
                 <div>
                     <h4 class="text-xs uppercase font-mono font-bold text-slate-400 mb-1">Payload</h4>
@@ -279,6 +323,16 @@
                 openModal(job) {
                     this.selectedJob = job;
                     this.modalOpen = true;
+                },
+
+                parseTags(jsonStr) {
+                    if (!jsonStr) return [];
+                    try {
+                        const parsed = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr;
+                        return Object.entries(parsed).map(([key, value]) => ({ key, value }));
+                    } catch (e) {
+                        return [];
+                    }
                 },
 
                 formatTime(ts) {
