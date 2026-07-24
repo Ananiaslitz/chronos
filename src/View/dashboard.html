@@ -125,6 +125,7 @@
                     <thead class="bg-slate-950/50 text-xs uppercase text-slate-400 font-mono border-b border-slate-800">
                         <tr>
                             <th class="px-6 py-3">Job ID</th>
+                            <th class="px-6 py-3">Trace ID</th>
                             <th class="px-6 py-3">Class</th>
                             <th class="px-6 py-3">Queue</th>
                             <th class="px-6 py-3">Status</th>
@@ -136,7 +137,7 @@
                     <tbody class="divide-y divide-slate-800/60">
                         <template x-if="jobs.length === 0">
                             <tr>
-                                <td colspan="7" class="px-6 py-12 text-center text-slate-500">
+                                <td colspan="8" class="px-6 py-12 text-center text-slate-500">
                                     No <span x-text="activeTab"></span> jobs found in storage.
                                 </td>
                             </tr>
@@ -144,6 +145,9 @@
                         <template x-for="job in jobs" :key="job.id">
                             <tr class="hover:bg-slate-800/40 transition">
                                 <td class="px-6 py-4 font-mono text-xs text-indigo-300" x-text="job.id"></td>
+                                <td class="px-6 py-4 font-mono text-xs">
+                                    <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[11px]" x-text="job.trace_id || '-'"></span>
+                                </td>
                                 <td class="px-6 py-4 font-medium text-white truncate max-w-xs" x-text="job.job_class"></td>
                                 <td class="px-6 py-4">
                                     <span class="px-2 py-1 rounded bg-slate-800 text-xs font-mono text-slate-300" x-text="job.queue || 'default'"></span>
@@ -233,6 +237,38 @@
                     </div>
                 </template>
 
+                <!-- Trace Waterfall Execution Tree -->
+                <template x-if="traceJobs.length > 0">
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h4 class="text-xs uppercase font-mono font-bold text-slate-400">Trace Execution Tree (Waterfall)</h4>
+                            <span class="text-[10px] font-mono text-indigo-400" x-text="traceJobs.length + ' event(s) in trace'"></span>
+                        </div>
+                        <div class="space-y-2 bg-slate-950 p-4 rounded-xl border border-slate-800">
+                            <template x-for="(tJob, idx) in traceJobs" :key="tJob.id">
+                                <div class="flex items-center justify-between text-xs font-mono p-2.5 rounded-lg bg-slate-900/60 border border-slate-800/80">
+                                    <div class="flex items-center space-x-2 truncate">
+                                        <span class="text-slate-500 font-bold" x-text="'#' + (idx + 1)"></span>
+                                        <span class="font-semibold text-white truncate" x-text="tJob.job_class"></span>
+                                        <template x-if="tJob.id === selectedJob?.id">
+                                            <span class="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px]">current</span>
+                                        </template>
+                                    </div>
+                                    <div class="flex items-center space-x-3">
+                                        <span class="text-amber-300 text-[11px]" x-text="'Wait: ' + (tJob.wait_time_ms || '0') + 'ms'"></span>
+                                        <span class="text-emerald-300 text-[11px]" x-text="'Run: ' + (tJob.duration_ms || '0') + 'ms'"></span>
+                                        <span :class="{
+                                            'text-emerald-400 bg-emerald-500/10 border-emerald-500/20': tJob.status === 'completed',
+                                            'text-rose-400 bg-rose-500/10 border-rose-500/20': tJob.status === 'failed',
+                                            'text-amber-400 bg-amber-500/10 border-amber-500/20': tJob.status === 'processing'
+                                        }" class="px-2 py-0.5 rounded text-[10px] font-bold border uppercase" x-text="tJob.status"></span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
                 <!-- Payload -->
                 <div>
                     <h4 class="text-xs uppercase font-mono font-bold text-slate-400 mb-1">Payload</h4>
@@ -273,6 +309,7 @@
                 loading: false,
                 modalOpen: false,
                 selectedJob: null,
+                traceJobs: [],
 
                 init() {
                     this.fetchData();
@@ -320,9 +357,21 @@
                     }
                 },
 
-                openModal(job) {
+                async openModal(job) {
                     this.selectedJob = job;
                     this.modalOpen = true;
+                    this.traceJobs = [];
+                    if (job && job.trace_id) {
+                        try {
+                            const res = await fetch(`/chronos/api/trace/${job.trace_id}`);
+                            const data = await res.json();
+                            if (data.status === 'success') {
+                                this.traceJobs = data.data || [];
+                            }
+                        } catch (e) {
+                            console.error('Trace fetch error:', e);
+                        }
+                    }
                 },
 
                 parseTags(jsonStr) {
