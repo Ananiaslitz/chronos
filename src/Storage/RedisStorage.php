@@ -21,8 +21,11 @@ class RedisStorage
     ) {
         $this->pool = $this->config->get('chronos.redis_pool', 'default');
         $this->prefix = $this->config->get('chronos.prefix', 'chronos:');
-        $this->recentLimit = (int) $this->config->get('chronos.metrics.recent_jobs_limit', 500);
-        $this->failedLimit = (int) $this->config->get('chronos.metrics.failed_jobs_limit', 200);
+        $limitRecent = (int) $this->config->get('chronos.metrics.recent_jobs_limit', 500);
+        $limitFailed = (int) $this->config->get('chronos.metrics.failed_jobs_limit', 200);
+
+        $this->recentLimit = $limitRecent > 0 ? $limitRecent : 500;
+        $this->failedLimit = $limitFailed > 0 ? $limitFailed : 200;
     }
 
     protected function redis()
@@ -117,17 +120,19 @@ class RedisStorage
 
     protected function trimRecentJobs($redis): void
     {
+        $limit = $this->recentLimit > 0 ? $this->recentLimit : 500;
         $card = (int) $redis->zCard($this->prefix . 'recent_jobs');
-        if ($card > $this->recentLimit) {
-            $redis->zRemRangeByRank($this->prefix . 'recent_jobs', 0, $card - $this->recentLimit - 1);
+        if ($card > $limit) {
+            $redis->zRemRangeByRank($this->prefix . 'recent_jobs', 0, $card - $limit - 1);
         }
     }
 
     protected function trimFailedJobs($redis): void
     {
+        $limit = $this->failedLimit > 0 ? $this->failedLimit : 200;
         $card = (int) $redis->zCard($this->prefix . 'failed_jobs');
-        if ($card > $this->failedLimit) {
-            $redis->zRemRangeByRank($this->prefix . 'failed_jobs', 0, $card - $this->failedLimit - 1);
+        if ($card > $limit) {
+            $redis->zRemRangeByRank($this->prefix . 'failed_jobs', 0, $card - $limit - 1);
         }
     }
 
