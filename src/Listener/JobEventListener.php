@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Chronos\Listener;
 
 use Chronos\Storage\RedisStorage;
+use Chronos\Tracing\TraceContext;
 use Hyperf\AsyncQueue\Event\AfterHandle;
 use Hyperf\AsyncQueue\Event\BeforeHandle;
 use Hyperf\AsyncQueue\Event\FailedHandle;
@@ -71,8 +72,9 @@ class JobEventListener implements ListenerInterface
         $this->startTimes[$jobId] = microtime(true);
 
         $payload = $job && method_exists($job, '__serialize') ? $job->__serialize() : (array) $job;
+        $meta = $this->buildMetadata($event, $job);
 
-        $this->storage->recordStart($jobId, $jobClass, $queue, $payload);
+        $this->storage->recordStart($jobId, $jobClass, $queue, $payload, 1, $meta);
     }
 
     protected function handleAfter(AfterHandle $event): void
@@ -88,7 +90,9 @@ class JobEventListener implements ListenerInterface
 
         unset($this->startTimes[$jobId]);
 
-        $this->storage->recordSuccess($jobId, $jobClass, $queue, $payload, $durationMs);
+        $meta = $this->buildMetadata($event, $job);
+
+        $this->storage->recordSuccess($jobId, $jobClass, $queue, $payload, $durationMs, $meta);
     }
 
     protected function handleFailed(FailedHandle $event): void
@@ -105,14 +109,46 @@ class JobEventListener implements ListenerInterface
         unset($this->startTimes[$jobId]);
 
         $throwable = method_exists($event, 'getThrowable') ? $event->getThrowable() : new \Exception('Unknown job error');
+        $meta = $this->buildMetadata($event, $job);
 
-        $this->storage->recordFailure($jobId, $jobClass, $queue, $payload, $throwable, $durationMs);
+        $this->storage->recordFailure($jobId, $jobClass, $queue, $payload, $throwable, $durationMs, $meta);
     }
 
     protected function handleRetry(RetryHandle $event): void
     {
         $jobId = $this->getJobId($event);
         $this->storage->recordRetry($jobId);
+    }
+
+    protected function buildMetadata(object $event, ?object $job): array
+    {
+        $traceId = TraceContext::getTraceId();
+
+        return [
+            'trace_id' => $traceId,
+            'pid' => getmypid(),
+            'hostname' => gethostname(),
+            'tags' => $this->extractTags($job),
+        ];
+    }
+
+    protected function extractTags(?object $job): array
+    {
+        if (! $job) {
+            return [];
+        }
+
+        $tags = [];
+        $payload = method_exists($job, '__serialize') ? $job->__serialize() : (array) $job;
+
+        foreach ($payload as $key => $val) {
+            $cleanKey = ltrim(str_replace("\0*\0", '', (string) $key));
+            if (is_scalar($val) && strlen((string) $val) <= 100) {
+                $tags[$cleanKey] = (string) $val;
+            }
+        }
+
+        return $tags;
     }
 
     protected function getMessage(object $event): ?object
