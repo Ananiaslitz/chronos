@@ -122,7 +122,10 @@ class JobEventListener implements ListenerInterface
 
     protected function buildMetadata(object $event, ?object $job): array
     {
-        $traceId = TraceContext::getTraceId();
+        $payload = $job && method_exists($job, '__serialize') ? $job->__serialize() : (array) $job;
+        
+        $traceId = $payload['__chronos_trace_id'] ?? TraceContext::getTraceId();
+        TraceContext::setTraceId($traceId);
 
         return [
             'trace_id' => $traceId,
@@ -143,6 +146,9 @@ class JobEventListener implements ListenerInterface
 
         foreach ($payload as $key => $val) {
             $cleanKey = ltrim(str_replace("\0*\0", '', (string) $key));
+            if ($cleanKey === '__chronos_trace_id') {
+                continue;
+            }
             if (is_scalar($val) && strlen((string) $val) <= 100) {
                 $tags[$cleanKey] = (string) $val;
             }
