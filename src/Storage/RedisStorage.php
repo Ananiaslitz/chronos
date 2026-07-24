@@ -57,40 +57,63 @@ class RedisStorage
         $redis->zRemRangeByRank($this->prefix . 'recent_jobs', 0, -($this->recentLimit + 1));
     }
 
-    public function recordSuccess(string $jobId, float $durationMs): void
+    public function recordSuccess(string $jobId, string $jobClass, string $queue, mixed $payload, float $durationMs): void
     {
         $now = microtime(true);
         $redis = $this->redis();
         $jobKey = $this->prefix . 'job:' . $jobId;
 
-        $redis->hMSet($jobKey, [
+        $existing = $redis->hGetAll($jobKey) ?: [];
+
+        $data = [
+            'id' => $jobId,
+            'job_class' => $existing['job_class'] ?? $jobClass,
+            'queue' => $existing['queue'] ?? $queue,
             'status' => 'completed',
+            'payload' => $existing['payload'] ?? (is_string($payload) ? $payload : json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)),
             'finished_at' => (string) $now,
             'duration_ms' => sprintf('%.2f', $durationMs),
-        ]);
+            'created_at' => $existing['created_at'] ?? (string) $now,
+        ];
+
+        $redis->hMSet($jobKey, $data);
+        $redis->expire($jobKey, 86400 * 3);
 
         $redis->hIncrBy($this->prefix . 'stats', 'completed', 1);
+        $redis->zAdd($this->prefix . 'recent_jobs', (int) ($now * 1000), $jobId);
+        $redis->zRemRangeByRank($this->prefix . 'recent_jobs', 0, -($this->recentLimit + 1));
     }
 
-    public function recordFailure(string $jobId, Throwable $exception, float $durationMs): void
+    public function recordFailure(string $jobId, string $jobClass, string $queue, mixed $payload, Throwable $exception, float $durationMs): void
     {
         $now = microtime(true);
         $redis = $this->redis();
         $jobKey = $this->prefix . 'job:' . $jobId;
 
-        $redis->hMSet($jobKey, [
+        $existing = $redis->hGetAll($jobKey) ?: [];
+
+        $data = [
+            'id' => $jobId,
+            'job_class' => $existing['job_class'] ?? $jobClass,
+            'queue' => $existing['queue'] ?? $queue,
             'status' => 'failed',
+            'payload' => $existing['payload'] ?? (is_string($payload) ? $payload : json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)),
             'finished_at' => (string) $now,
             'duration_ms' => sprintf('%.2f', $durationMs),
+            'created_at' => $existing['created_at'] ?? (string) $now,
             'exception_message' => $exception->getMessage(),
             'exception_class' => get_class($exception),
             'exception_trace' => $exception->getTraceAsString(),
-        ]);
+        ];
+
+        $redis->hMSet($jobKey, $data);
+        $redis->expire($jobKey, 86400 * 3);
 
         $redis->hIncrBy($this->prefix . 'stats', 'failed', 1);
+        $redis->zAdd($this->prefix . 'recent_jobs', (int) ($now * 1000), $jobId);
         $redis->zAdd($this->prefix . 'failed_jobs', (int) ($now * 1000), $jobId);
 
-        // Trim failed jobs
+        $redis->zRemRangeByRank($this->prefix . 'recent_jobs', 0, -($this->recentLimit + 1));
         $redis->zRemRangeByRank($this->prefix . 'failed_jobs', 0, -($this->failedLimit + 1));
     }
 
@@ -109,11 +132,17 @@ class RedisStorage
         $redis = $this->redis();
         $stats = $redis->hGetAll($this->prefix . 'stats') ?: [];
 
+        $completed = (int) ($stats['completed'] ?? 0);
+        $failed = (int) ($stats['failed'] ?? 0);
+        $retried = (int) ($stats['retried'] ?? 0);
+        $totalRaw = (int) ($stats['total'] ?? 0);
+        $total = max($totalRaw, $completed + $failed);
+
         return [
-            'total' => (int) ($stats['total'] ?? 0),
-            'completed' => (int) ($stats['completed'] ?? 0),
-            'failed' => (int) ($stats['failed'] ?? 0),
-            'retried' => (int) ($stats['retried'] ?? 0),
+            'total' => $total,
+            'completed' => $completed,
+            'failed' => $failed,
+            'retried' => $retried,
         ];
     }
 

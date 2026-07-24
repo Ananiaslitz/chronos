@@ -67,24 +67,34 @@ class JobEventListener implements ListenerInterface
 
     protected function handleAfter(AfterHandle $event): void
     {
+        $job = $event->getMessage()->job ?? $event->job ?? null;
         $jobId = $this->getJobId($event);
+        $jobClass = $job ? get_class($job) : 'UnknownJob';
+        $queue = method_exists($event->getMessage(), 'getQueue') ? $event->getMessage()->getQueue() : 'default';
+        $payload = method_exists($job, '__serialize') ? $job->__serialize() : (array) $job;
+
         $startTime = $this->startTimes[$jobId] ?? microtime(true);
         $durationMs = (microtime(true) - $startTime) * 1000;
 
         unset($this->startTimes[$jobId]);
 
-        $this->storage->recordSuccess($jobId, $durationMs);
+        $this->storage->recordSuccess($jobId, $jobClass, $queue, $payload, $durationMs);
     }
 
     protected function handleFailed(FailedHandle $event): void
     {
+        $job = $event->getMessage()->job ?? $event->job ?? null;
         $jobId = $this->getJobId($event);
+        $jobClass = $job ? get_class($job) : 'UnknownJob';
+        $queue = method_exists($event->getMessage(), 'getQueue') ? $event->getMessage()->getQueue() : 'default';
+        $payload = method_exists($job, '__serialize') ? $job->__serialize() : (array) $job;
+
         $startTime = $this->startTimes[$jobId] ?? microtime(true);
         $durationMs = (microtime(true) - $startTime) * 1000;
 
         unset($this->startTimes[$jobId]);
 
-        $this->storage->recordFailure($jobId, $event->getThrowable(), $durationMs);
+        $this->storage->recordFailure($jobId, $jobClass, $queue, $payload, $event->getThrowable(), $durationMs);
     }
 
     protected function handleRetry(RetryHandle $event): void
@@ -101,11 +111,19 @@ class JobEventListener implements ListenerInterface
             return (string) $message->getId();
         }
 
-        $job = $message->job ?? ($event->job ?? null);
+        $job = $message ? ($message->job ?? null) : ($event->job ?? null);
         if ($job && property_exists($job, 'id') && $job->id) {
             return (string) $job->id;
         }
 
-        return md5(get_class($event) . spl_object_hash($event));
+        if ($job) {
+            return md5(get_class($job) . ':' . spl_object_hash($job));
+        }
+
+        if ($message) {
+            return md5(get_class($message) . ':' . spl_object_hash($message));
+        }
+
+        return md5(get_class($event) . ':' . spl_object_hash($event));
     }
 }
