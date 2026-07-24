@@ -241,27 +241,35 @@
                 <template x-if="traceJobs.length > 0">
                     <div>
                         <div class="flex items-center justify-between mb-2">
-                            <h4 class="text-xs uppercase font-mono font-bold text-slate-400">Trace Execution Tree (Waterfall)</h4>
+                            <h4 class="text-xs uppercase font-mono font-bold text-slate-400">Trace Execution Tree (Waterfall Timeline)</h4>
                             <span class="text-[10px] font-mono text-indigo-400" x-text="traceJobs.length + ' event(s) in trace'"></span>
                         </div>
-                        <div class="space-y-2 bg-slate-950 p-4 rounded-xl border border-slate-800">
-                            <template x-for="(tJob, idx) in traceJobs" :key="tJob.id">
-                                <div class="flex items-center justify-between text-xs font-mono p-2.5 rounded-lg bg-slate-900/60 border border-slate-800/80">
+                        <div class="space-y-2 bg-slate-950 p-4 rounded-xl border border-slate-800 max-h-72 overflow-y-auto">
+                            <template x-for="(tJob, idx) in traceJobs" :key="tJob.id || idx">
+                                <div :class="tJob.type === 'db_query' ? 'bg-cyan-950/30 border-cyan-800/50 ml-4' : 'bg-slate-900/60 border-slate-800/80'" class="flex items-center justify-between text-xs font-mono p-2.5 rounded-lg border">
                                     <div class="flex items-center space-x-2 truncate">
                                         <span class="text-slate-500 font-bold" x-text="'#' + (idx + 1)"></span>
-                                        <span class="font-semibold text-white truncate" x-text="tJob.job_class"></span>
+                                        <template x-if="tJob.type === 'db_query'">
+                                            <span class="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-bold border border-cyan-500/30">DB</span>
+                                        </template>
+                                        <template x-if="tJob.type !== 'db_query'">
+                                            <span class="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px] font-bold border border-indigo-500/30">JOB</span>
+                                        </template>
+                                        <span class="font-semibold text-white truncate max-w-sm" x-text="tJob.job_class"></span>
                                         <template x-if="tJob.id === selectedJob?.id">
-                                            <span class="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px]">current</span>
+                                            <span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px]">active</span>
                                         </template>
                                     </div>
-                                    <div class="flex items-center space-x-3">
-                                        <span class="text-amber-300 text-[11px]" x-text="'Wait: ' + (tJob.wait_time_ms || '0') + 'ms'"></span>
+                                    <div class="flex items-center space-x-3 shrink-0">
+                                        <template x-if="tJob.type !== 'db_query'">
+                                            <span class="text-amber-300 text-[11px]" x-text="'Wait: ' + (tJob.wait_time_ms || '0') + 'ms'"></span>
+                                        </template>
                                         <span class="text-emerald-300 text-[11px]" x-text="'Run: ' + (tJob.duration_ms || '0') + 'ms'"></span>
                                         <span :class="{
                                             'text-emerald-400 bg-emerald-500/10 border-emerald-500/20': tJob.status === 'completed',
                                             'text-rose-400 bg-rose-500/10 border-rose-500/20': tJob.status === 'failed',
                                             'text-amber-400 bg-amber-500/10 border-amber-500/20': tJob.status === 'processing'
-                                        }" class="px-2 py-0.5 rounded text-[10px] font-bold border uppercase" x-text="tJob.status"></span>
+                                        }" class="px-2 py-0.5 rounded text-[10px] font-bold border uppercase" x-text="tJob.status || 'OK'"></span>
                                     </div>
                                 </div>
                             </template>
