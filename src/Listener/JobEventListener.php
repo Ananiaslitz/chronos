@@ -11,6 +11,7 @@ use Hyperf\AsyncQueue\Event\FailedHandle;
 use Hyperf\AsyncQueue\Event\RetryHandle;
 use Hyperf\Event\Annotation\Listener;
 use Hyperf\Event\Contract\ListenerInterface;
+use ReflectionProperty;
 use Throwable;
 use WeakMap;
 
@@ -56,7 +57,7 @@ class JobEventListener implements ListenerInterface
                 $this->handleRetry($event);
             }
         } catch (Throwable $e) {
-            error_log('[Chronos Error] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+            error_log('[Chronos Listener Error] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
         }
     }
 
@@ -69,7 +70,7 @@ class JobEventListener implements ListenerInterface
 
         $this->startTimes[$jobId] = microtime(true);
 
-        $payload = method_exists($job, '__serialize') ? $job->__serialize() : (array) $job;
+        $payload = $job && method_exists($job, '__serialize') ? $job->__serialize() : (array) $job;
 
         $this->storage->recordStart($jobId, $jobClass, $queue, $payload);
     }
@@ -80,7 +81,7 @@ class JobEventListener implements ListenerInterface
         $jobId = $this->getJobId($event);
         $jobClass = $job ? get_class($job) : 'UnknownJob';
         $queue = 'default';
-        $payload = method_exists($job, '__serialize') ? $job->__serialize() : (array) $job;
+        $payload = $job && method_exists($job, '__serialize') ? $job->__serialize() : (array) $job;
 
         $startTime = $this->startTimes[$jobId] ?? microtime(true);
         $durationMs = (microtime(true) - $startTime) * 1000;
@@ -96,14 +97,14 @@ class JobEventListener implements ListenerInterface
         $jobId = $this->getJobId($event);
         $jobClass = $job ? get_class($job) : 'UnknownJob';
         $queue = 'default';
-        $payload = method_exists($job, '__serialize') ? $job->__serialize() : (array) $job;
+        $payload = $job && method_exists($job, '__serialize') ? $job->__serialize() : (array) $job;
 
         $startTime = $this->startTimes[$jobId] ?? microtime(true);
         $durationMs = (microtime(true) - $startTime) * 1000;
 
         unset($this->startTimes[$jobId]);
 
-        $throwable = property_exists($event, 'throwable') ? $event->throwable : new \Exception('Unknown job error');
+        $throwable = method_exists($event, 'getThrowable') ? $event->getThrowable() : new \Exception('Unknown job error');
 
         $this->storage->recordFailure($jobId, $jobClass, $queue, $payload, $throwable, $durationMs);
     }
@@ -116,10 +117,6 @@ class JobEventListener implements ListenerInterface
 
     protected function getMessage(object $event): ?object
     {
-        if (property_exists($event, 'message') && $event->message) {
-            return $event->message;
-        }
-
         if (method_exists($event, 'getMessage')) {
             return $event->getMessage();
         }
@@ -130,12 +127,22 @@ class JobEventListener implements ListenerInterface
     protected function getJob(object $event): ?object
     {
         $message = $this->getMessage($event);
-        if ($message && property_exists($message, 'job') && $message->job) {
-            return $message->job;
+        if (! $message) {
+            return null;
         }
 
-        if (property_exists($event, 'job') && $event->job) {
-            return $event->job;
+        if (method_exists($message, 'job')) {
+            return $message->job();
+        }
+
+        if (property_exists($message, 'job')) {
+            try {
+                $ref = new ReflectionProperty($message, 'job');
+                $ref->setAccessible(true);
+                return $ref->getValue($message);
+            } catch (Throwable $e) {
+                // Ignore reflection error
+            }
         }
 
         return null;
@@ -144,10 +151,6 @@ class JobEventListener implements ListenerInterface
     protected function getJobId(object $event): string
     {
         $message = $this->getMessage($event);
-
-        if ($message && method_exists($message, 'getId') && $message->getId()) {
-            return (string) $message->getId();
-        }
 
         $job = $this->getJob($event);
 
