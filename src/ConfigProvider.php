@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Chronos;
 
+use Chronos\Listener\DbQueryEventListener;
 use Chronos\Listener\JobEventListener;
 
 class ConfigProvider
@@ -14,6 +15,7 @@ class ConfigProvider
             'dependencies' => [],
             'listeners' => [
                 JobEventListener::class,
+                DbQueryEventListener::class,
             ],
             'annotations' => [
                 'scan' => [
