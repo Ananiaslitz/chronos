@@ -12,6 +12,7 @@ use Hyperf\AsyncQueue\Event\RetryHandle;
 use Hyperf\Event\Annotation\Listener;
 use Hyperf\Event\Contract\ListenerInterface;
 use Throwable;
+use WeakMap;
 
 #[Listener]
 class JobEventListener implements ListenerInterface
@@ -21,9 +22,16 @@ class JobEventListener implements ListenerInterface
      */
     protected array $startTimes = [];
 
+    /**
+     * WeakMap mapping job/message object instances to generated unique Chronos IDs.
+     */
+    protected WeakMap $jobIdMap;
+
     public function __construct(
         protected RedisStorage $storage
-    ) {}
+    ) {
+        $this->jobIdMap = new WeakMap();
+    }
 
     public function listen(): array
     {
@@ -143,16 +151,24 @@ class JobEventListener implements ListenerInterface
 
         $job = $this->getJob($event);
 
-        if ($job && property_exists($job, 'id') && $job->id) {
-            return (string) $job->id;
-        }
-
         if ($job) {
-            return md5(get_class($job) . ':' . spl_object_hash($job));
+            if (property_exists($job, 'id') && $job->id) {
+                return (string) $job->id;
+            }
+
+            if (! isset($this->jobIdMap[$job])) {
+                $this->jobIdMap[$job] = md5(get_class($job) . ':' . microtime(true) . ':' . rand(1000, 9999));
+            }
+
+            return $this->jobIdMap[$job];
         }
 
         if ($message) {
-            return md5(get_class($message) . ':' . spl_object_hash($message));
+            if (! isset($this->jobIdMap[$message])) {
+                $this->jobIdMap[$message] = md5(get_class($message) . ':' . microtime(true) . ':' . rand(1000, 9999));
+            }
+
+            return $this->jobIdMap[$message];
         }
 
         return md5(get_class($event) . ':' . spl_object_hash($event));
