@@ -51,7 +51,7 @@ class RedisStorage
         $redis->expire($jobKey, 86400 * 3); // 3 days retention
 
         $redis->hIncrBy($this->prefix . 'stats', 'total', 1);
-        $redis->zAdd($this->prefix . 'recent_jobs', (int) ($now * 1000), $jobId);
+        $redis->zAdd($this->prefix . 'recent_jobs', (float) $now, $jobId);
         $this->trimRecentJobs($redis);
     }
 
@@ -78,7 +78,7 @@ class RedisStorage
         $redis->expire($jobKey, 86400 * 3);
 
         $redis->hIncrBy($this->prefix . 'stats', 'completed', 1);
-        $redis->zAdd($this->prefix . 'recent_jobs', (int) ($now * 1000), $jobId);
+        $redis->zAdd($this->prefix . 'recent_jobs', (float) $now, $jobId);
         $this->trimRecentJobs($redis);
     }
 
@@ -108,8 +108,8 @@ class RedisStorage
         $redis->expire($jobKey, 86400 * 3);
 
         $redis->hIncrBy($this->prefix . 'stats', 'failed', 1);
-        $redis->zAdd($this->prefix . 'recent_jobs', (int) ($now * 1000), $jobId);
-        $redis->zAdd($this->prefix . 'failed_jobs', (int) ($now * 1000), $jobId);
+        $redis->zAdd($this->prefix . 'recent_jobs', (float) $now, $jobId);
+        $redis->zAdd($this->prefix . 'failed_jobs', (float) $now, $jobId);
 
         $this->trimRecentJobs($redis);
         $this->trimFailedJobs($redis);
