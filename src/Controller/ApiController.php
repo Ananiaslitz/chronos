@@ -67,6 +67,19 @@ class ApiController
         ]);
     }
 
+    #[GetMapping(path: 'trace/{traceId}')]
+    public function trace(string $traceId, ResponseInterface $response)
+    {
+        $jobs = $this->storage->getTraceJobs($traceId);
+
+        return $response->json([
+            'status' => 'success',
+            'trace_id' => $traceId,
+            'count' => count($jobs),
+            'data' => $jobs,
+        ]);
+    }
+
     #[PostMapping(path: 'jobs/{id}/retry')]
     public function retry(string $id, ResponseInterface $response)
     {
