@@ -600,30 +600,50 @@
                      :class="span.type === 'db_query'
                         ? 'bg-cyan-950/30 border-cyan-800/40 ml-6'
                         : span.type === 'http'
-                            ? 'bg-indigo-950/30 border-indigo-800/40'
+                            ? 'bg-violet-950/30 border-violet-800/40'
                             : 'bg-white/[0.03] border-white/[0.06]'">
                     <div class="flex items-center space-x-2 min-w-0">
                         <span class="text-slate-600 font-bold flex-shrink-0" x-text="'#' + (idx + 1)"></span>
-                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold flex-shrink-0"
+                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold flex-shrink-0 border"
                               :class="{
-                                'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30': span.type === 'db_query',
-                                'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30': span.type !== 'db_query'
+                                'bg-cyan-500/20 text-cyan-300 border-cyan-500/30': span.type === 'db_query',
+                                'bg-violet-500/20 text-violet-300 border-violet-500/30': span.type === 'http',
+                                'bg-indigo-500/20 text-indigo-300 border-indigo-500/30': span.type !== 'db_query' && span.type !== 'http'
                               }"
-                              x-text="span.type === 'db_query' ? 'SQL' : 'JOB'">
+                              x-text="span.type === 'db_query' ? 'SQL' : span.type === 'http' ? 'HTTP' : 'JOB'">
                         </span>
                         <span class="truncate text-white" x-text="span.job_class || span.sql"></span>
+                        <!-- HTTP status badge -->
+                        <template x-if="span.type === 'http' && span.status_code">
+                            <span class="px-1.5 py-0.5 rounded text-[9px] font-bold border"
+                                  :class="{
+                                    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20': parseInt(span.status_code) < 300,
+                                    'bg-amber-500/10 text-amber-400 border-amber-500/20': parseInt(span.status_code) >= 300 && parseInt(span.status_code) < 400,
+                                    'bg-rose-500/10 text-rose-400 border-rose-500/20': parseInt(span.status_code) >= 400
+                                  }"
+                                  x-text="span.status_code">
+                            </span>
+                        </template>
+                        <!-- Slow badge -->
+                        <template x-if="span.type === 'http' && span.is_slow === '1'">
+                            <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">SLOW</span>
+                        </template>
                     </div>
                     <div class="flex items-center space-x-3 flex-shrink-0 ml-3">
-                        <span class="text-amber-300 text-[10px]" x-text="span.wait_time_ms ? span.wait_time_ms + 'ms wait' : ''"></span>
+                        <template x-if="span.type !== 'http'">
+                            <span class="text-amber-300 text-[10px]" x-text="span.wait_time_ms ? span.wait_time_ms + 'ms wait' : ''"></span>
+                        </template>
                         <span class="text-emerald-300 text-[10px]" x-text="(span.duration_ms || '0') + 'ms'"></span>
-                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold border uppercase"
-                              :class="{
-                                'bg-emerald-500/10 text-emerald-400 border-emerald-500/20': span.status === 'completed',
-                                'bg-rose-500/10 text-rose-400 border-rose-500/20': span.status === 'failed',
-                                'bg-amber-500/10 text-amber-400 border-amber-500/20': span.status === 'processing',
-                              }"
-                              x-text="span.status || 'OK'">
-                        </span>
+                        <template x-if="span.type !== 'http'">
+                            <span class="px-1.5 py-0.5 rounded text-[9px] font-bold border uppercase"
+                                  :class="{
+                                    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20': span.status === 'completed',
+                                    'bg-rose-500/10 text-rose-400 border-rose-500/20': span.status === 'failed',
+                                    'bg-amber-500/10 text-amber-400 border-amber-500/20': span.status === 'processing',
+                                  }"
+                                  x-text="span.status || 'OK'">
+                            </span>
+                        </template>
                     </div>
                 </div>
             </template>

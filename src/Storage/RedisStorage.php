@@ -294,14 +294,27 @@ class RedisStorage
 
         $spans = [];
         foreach ($items as $item) {
-            if (str_starts_with((string) $item, 'span:')) {
-                $spanId   = substr((string) $item, 5);
+            $item = (string) $item;
+
+            if (str_starts_with($item, 'http:')) {
+                // Root HTTP request span
+                $httpId   = substr($item, 5);
+                $httpData = $redis->hGetAll($this->prefix . 'http:' . $httpId);
+                if ($httpData) {
+                    $httpData['type']      = 'http';
+                    $httpData['job_class'] = ($httpData['method'] ?? 'HTTP') . ' ' . ($httpData['path'] ?? $httpId);
+                    array_unshift($spans, $httpData); // Always first
+                }
+            } elseif (str_starts_with($item, 'span:')) {
+                // DB query span
+                $spanId   = substr($item, 5);
                 $spanData = $redis->hGetAll($this->prefix . 'span:' . $spanId);
                 if ($spanData) {
                     $spans[] = $spanData;
                 }
             } else {
-                $jobData = $this->getJob((string) $item);
+                // Queue job
+                $jobData = $this->getJob($item);
                 if ($jobData) {
                     $jobData['type'] = 'job';
                     $spans[] = $jobData;
@@ -377,6 +390,11 @@ class RedisStorage
         $redis->expire($httpKey, 86400 * 2);
 
         $redis->zAdd($this->prefix . 'http_requests', (float) $now, $traceId);
+
+        // Register the HTTP request as the root span of the trace
+        // so the Trace Explorer modal can show it at the top of the waterfall
+        $redis->zAdd($this->prefix . 'trace:' . $traceId, (float) $now - 0.001, 'http:' . $traceId);
+        $redis->expire($this->prefix . 'trace:' . $traceId, 86400 * 2);
 
         $statusCode = (int) ($data['status_code'] ?? 200);
         $redis->hIncrBy($this->prefix . 'http_stats', 'total', 1);
