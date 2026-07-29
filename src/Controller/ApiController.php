@@ -22,30 +22,47 @@ class ApiController
         protected ContainerInterface $container
     ) {}
 
+    // =========================================================================
+    // Overview / Health
+    // =========================================================================
+
+    #[GetMapping(path: 'health')]
+    public function health(ResponseInterface $response)
+    {
+        return $response->json([
+            'status' => 'success',
+            'data'   => $this->storage->getHealth(),
+        ]);
+    }
+
+    // =========================================================================
+    // Queue Job Endpoints
+    // =========================================================================
+
     #[GetMapping(path: 'stats')]
     public function stats(ResponseInterface $response)
     {
         return $response->json([
             'status' => 'success',
-            'data' => $this->storage->getStats(),
+            'data'   => $this->storage->getStats(),
         ]);
     }
 
     #[GetMapping(path: 'jobs')]
     public function jobs(RequestInterface $request, ResponseInterface $response)
     {
-        $type = $request->input('type', 'recent');
+        $type  = $request->input('type', 'recent');
         $limit = (int) $request->input('limit', 50);
 
-        $jobs = $type === 'failed' 
-            ? $this->storage->getFailedJobs($limit) 
+        $jobs = $type === 'failed'
+            ? $this->storage->getFailedJobs($limit)
             : $this->storage->getRecentJobs($limit);
 
         return $response->json([
             'status' => 'success',
-            'type' => $type,
-            'count' => count($jobs),
-            'data' => $jobs,
+            'type'   => $type,
+            'count'  => count($jobs),
+            'data'   => $jobs,
         ]);
     }
 
@@ -56,14 +73,14 @@ class ApiController
 
         if (! $job) {
             return $response->json([
-                'status' => 'error',
+                'status'  => 'error',
                 'message' => 'Job not found',
             ])->withStatus(404);
         }
 
         return $response->json([
             'status' => 'success',
-            'data' => $job,
+            'data'   => $job,
         ]);
     }
 
@@ -73,10 +90,10 @@ class ApiController
         $jobs = $this->storage->getTraceJobs($traceId);
 
         return $response->json([
-            'status' => 'success',
+            'status'   => 'success',
             'trace_id' => $traceId,
-            'count' => count($jobs),
-            'data' => $jobs,
+            'count'    => count($jobs),
+            'data'     => $jobs,
         ]);
     }
 
@@ -87,19 +104,19 @@ class ApiController
 
         if (! $jobData) {
             return $response->json([
-                'status' => 'error',
+                'status'  => 'error',
                 'message' => 'Job not found for retry',
             ])->withStatus(404);
         }
 
         try {
             $queueName = $jobData['queue'] ?? 'default';
-            $jobClass = $jobData['job_class'] ?? null;
-            $payload = json_decode($jobData['payload'] ?? '[]', true);
+            $jobClass  = $jobData['job_class'] ?? null;
+            $payload   = json_decode($jobData['payload'] ?? '[]', true);
 
             if ($this->container->has(DriverFactory::class)) {
                 $driverFactory = $this->container->get(DriverFactory::class);
-                $driver = $driverFactory->get($queueName);
+                $driver        = $driverFactory->get($queueName);
 
                 if ($jobClass && class_exists($jobClass)) {
                     $jobInstance = new $jobClass(...array_values($payload));
@@ -110,12 +127,12 @@ class ApiController
             $this->storage->recordRetry($id);
 
             return $response->json([
-                'status' => 'success',
+                'status'  => 'success',
                 'message' => 'Job successfully re-queued for retry',
             ]);
         } catch (\Throwable $e) {
             return $response->json([
-                'status' => 'error',
+                'status'  => 'error',
                 'message' => 'Failed to retry job: ' . $e->getMessage(),
             ])->withStatus(500);
         }
@@ -124,7 +141,7 @@ class ApiController
     #[PostMapping(path: 'jobs/batch-retry')]
     public function batchRetry(RequestInterface $request, ResponseInterface $response)
     {
-        $ids = (array) $request->input('ids', []);
+        $ids     = (array) $request->input('ids', []);
         $retried = 0;
 
         foreach ($ids as $id) {
@@ -135,12 +152,12 @@ class ApiController
 
             try {
                 $queueName = $jobData['queue'] ?? 'default';
-                $jobClass = $jobData['job_class'] ?? null;
-                $payload = json_decode($jobData['payload'] ?? '[]', true);
+                $jobClass  = $jobData['job_class'] ?? null;
+                $payload   = json_decode($jobData['payload'] ?? '[]', true);
 
                 if ($this->container->has(DriverFactory::class)) {
                     $driverFactory = $this->container->get(DriverFactory::class);
-                    $driver = $driverFactory->get($queueName);
+                    $driver        = $driverFactory->get($queueName);
 
                     if ($jobClass && class_exists($jobClass)) {
                         $jobInstance = new $jobClass(...array_values($payload));
@@ -156,8 +173,8 @@ class ApiController
         }
 
         return $response->json([
-            'status' => 'success',
-            'message' => sprintf('Re-queued %d jobs for retry', $retried),
+            'status'        => 'success',
+            'message'       => sprintf('Re-queued %d jobs for retry', $retried),
             'retried_count' => $retried,
         ]);
     }
@@ -165,12 +182,12 @@ class ApiController
     #[PostMapping(path: 'jobs/batch-delete')]
     public function batchDelete(RequestInterface $request, ResponseInterface $response)
     {
-        $ids = (array) $request->input('ids', []);
+        $ids   = (array) $request->input('ids', []);
         $count = $this->storage->deleteJobs($ids);
 
         return $response->json([
-            'status' => 'success',
-            'message' => sprintf('Deleted %d jobs', $count),
+            'status'        => 'success',
+            'message'       => sprintf('Deleted %d jobs', $count),
             'deleted_count' => $count,
         ]);
     }
@@ -181,7 +198,7 @@ class ApiController
         $this->storage->deleteJob($id);
 
         return $response->json([
-            'status' => 'success',
+            'status'  => 'success',
             'message' => 'Job deleted successfully',
         ]);
     }
@@ -192,9 +209,87 @@ class ApiController
         $count = $this->storage->clearFailedJobs();
 
         return $response->json([
-            'status' => 'success',
-            'message' => sprintf('Cleared %d failed jobs', $count),
+            'status'        => 'success',
+            'message'       => sprintf('Cleared %d failed jobs', $count),
             'cleared_count' => $count,
+        ]);
+    }
+
+    // =========================================================================
+    // HTTP Request Endpoints
+    // =========================================================================
+
+    #[GetMapping(path: 'http')]
+    public function httpRequests(RequestInterface $request, ResponseInterface $response)
+    {
+        $filter = $request->input('filter', 'all'); // all | slow | errors
+        $limit  = (int) $request->input('limit', 50);
+
+        $requests = $this->storage->getRecentHttpRequests($limit, $filter);
+
+        return $response->json([
+            'status' => 'success',
+            'filter' => $filter,
+            'count'  => count($requests),
+            'data'   => $requests,
+        ]);
+    }
+
+    #[GetMapping(path: 'http/stats')]
+    public function httpStats(ResponseInterface $response)
+    {
+        return $response->json([
+            'status' => 'success',
+            'data'   => $this->storage->getHttpStats(),
+        ]);
+    }
+
+    // =========================================================================
+    // Log Endpoints
+    // =========================================================================
+
+    #[GetMapping(path: 'logs')]
+    public function logs(RequestInterface $request, ResponseInterface $response)
+    {
+        $minLevel = $request->input('min_level', 'warning');
+        $limit    = (int) $request->input('limit', 50);
+
+        $logs = $this->storage->getRecentLogs($limit, $minLevel);
+
+        return $response->json([
+            'status'    => 'success',
+            'min_level' => $minLevel,
+            'count'     => count($logs),
+            'data'      => $logs,
+        ]);
+    }
+
+    #[DeleteMapping(path: 'logs')]
+    public function clearLogs(ResponseInterface $response)
+    {
+        $count = $this->storage->clearLogs();
+
+        return $response->json([
+            'status'        => 'success',
+            'message'       => sprintf('Cleared %d log entries', $count),
+            'cleared_count' => $count,
+        ]);
+    }
+
+    // =========================================================================
+    // Slow Query Endpoints
+    // =========================================================================
+
+    #[GetMapping(path: 'slow-queries')]
+    public function slowQueries(RequestInterface $request, ResponseInterface $response)
+    {
+        $limit   = (int) $request->input('limit', 50);
+        $queries = $this->storage->getSlowQueries($limit);
+
+        return $response->json([
+            'status' => 'success',
+            'count'  => count($queries),
+            'data'   => $queries,
         ]);
     }
 }

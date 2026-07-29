@@ -13,7 +13,7 @@ class ConfigProvider
     {
         return [
             'dependencies' => [],
-            'listeners' => [
+            'listeners'    => [
                 JobEventListener::class,
                 DbQueryEventListener::class,
             ],
@@ -26,9 +26,9 @@ class ConfigProvider
             ],
             'publish' => [
                 [
-                    'id' => 'config',
+                    'id'          => 'config',
                     'description' => 'The configuration file for Chronos.',
-                    'source' => __DIR__ . '/../publish/chronos.php',
+                    'source'      => __DIR__ . '/../publish/chronos.php',
                     'destination' => BASE_PATH . '/config/autoload/chronos.php',
                 ],
             ],

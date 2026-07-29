@@ -3,25 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chronos — Hyperf Queue Manager</title>
-    <!-- Tailwind CSS CDN -->
+    <title>Chronos — Hyperf Observability</title>
+    <meta name="description" content="Real-time observability dashboard for Hyperf: HTTP requests, queue jobs, slow queries and structured logs.">
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Alpine.js CDN -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {
                 extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'ui-sans-serif', 'system-ui'],
+                        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+                    },
                     colors: {
-                        brand: {
-                            50: '#f0f4ff',
-                            500: '#6366f1',
-                            600: '#4f46e5',
-                            700: '#4338ca',
-                            900: '#1e1b4b',
+                        surface: {
+                            50:  '#f8fafc',
+                            900: '#0f1117',
+                            950: '#080b10',
                         }
                     }
                 }
@@ -30,547 +32,1059 @@
     </script>
     <style>
         [x-cloak] { display: none !important; }
+
+        body { background: #080b10; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        /* Glass sidebar */
+        .sidebar-glass {
+            background: rgba(15, 17, 23, 0.9);
+            border-right: 1px solid rgba(255,255,255,0.05);
+            backdrop-filter: blur(12px);
+        }
+
+        /* Nav item active glow */
+        .nav-active {
+            background: linear-gradient(90deg, rgba(99,102,241,0.18) 0%, rgba(99,102,241,0.06) 100%);
+            border-left: 2px solid #6366f1;
+        }
+
+        /* Card hover */
+        .metric-card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
+            border: 1px solid rgba(255,255,255,0.06);
+            transition: border-color 0.2s ease, transform 0.15s ease;
+        }
+        .metric-card:hover { border-color: rgba(99,102,241,0.3); transform: translateY(-1px); }
+
+        /* Status badge pulse */
+        @keyframes statusPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .pulse { animation: statusPulse 2s ease-in-out infinite; }
+
+        /* Waterfall bar animation */
+        @keyframes barGrow {
+            from { width: 0%; }
+            to { width: var(--bar-width); }
+        }
+        .bar-grow { animation: barGrow 0.5s ease-out forwards; }
+
+        /* Table row fade-in */
+        @keyframes fadeInRow {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .row-fade { animation: fadeInRow 0.25s ease-out forwards; }
+
+        /* Gradient text */
+        .gradient-text {
+            background: linear-gradient(135deg, #fff 0%, #94a3b8 50%, #818cf8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased" x-data="chronosApp()">
+<body class="text-slate-100 min-h-screen font-sans antialiased" x-data="chronosApp()">
 
-    <!-- Header / Navbar -->
-    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-30">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+<!-- ============================================================ LAYOUT ============================================================ -->
+<div class="flex h-screen overflow-hidden">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar-glass w-56 flex-shrink-0 flex flex-col z-20 overflow-y-auto">
+
+        <!-- Brand -->
+        <div class="px-4 py-5 border-b border-white/5">
             <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-xl shadow-lg shadow-indigo-500/20">
-                    🏛️
-                </div>
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-lg shadow-lg shadow-indigo-500/30 flex-shrink-0">🏛️</div>
                 <div>
-                    <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-200 to-indigo-300 bg-clip-text text-transparent">Chronos</h1>
-                    <p class="text-xs text-slate-400 font-mono">Hyperf Queue Monitor</p>
+                    <div class="text-sm font-bold gradient-text tracking-tight">Chronos</div>
+                    <div class="text-[10px] text-slate-500 font-mono">Hyperf Observability</div>
                 </div>
             </div>
+        </div>
 
-            <div class="flex items-center space-x-4">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span>
-                    Live Polling (3s)
-                </span>
+        <!-- Nav -->
+        <nav class="flex-1 py-4 px-2 space-y-0.5">
+            <template x-for="item in navItems" :key="item.id">
+                <button
+                    @click="switchTab(item.id)"
+                    :class="activeTab === item.id ? 'nav-active text-indigo-300' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'"
+                    class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 text-left"
+                >
+                    <span class="text-base w-5 text-center flex-shrink-0" x-text="item.icon"></span>
+                    <span x-text="item.label" class="truncate"></span>
+                    <template x-if="item.badge && item.badge > 0">
+                        <span class="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold"
+                              :class="item.badgeColor || 'bg-slate-700 text-slate-300'"
+                              x-text="item.badge >= 100 ? '99+' : item.badge">
+                        </span>
+                    </template>
+                </button>
+            </template>
+        </nav>
 
-                <button @click="fetchData()" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition hover:text-white" title="Refresh Now">
-                    <svg class="w-4 h-4" :class="loading ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        <!-- Bottom status -->
+        <div class="px-4 py-4 border-t border-white/5 space-y-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse"></span>
+                    <span class="text-[10px] text-slate-500 font-mono">Live · 3s</span>
+                </div>
+                <button @click="fetchAll()" class="p-1.5 rounded-lg hover:bg-white/10 transition text-slate-400 hover:text-white" title="Refresh">
+                    <svg class="w-3.5 h-3.5" :class="loading ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
                 </button>
             </div>
+            <div class="text-[10px] font-mono text-slate-600 leading-relaxed" x-text="lastUpdated ? 'Updated ' + lastUpdated : 'Waiting...'"></div>
         </div>
-    </header>
+    </aside>
 
-    <!-- Main Content -->
-    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <!-- MAIN CONTENT -->
+    <div class="flex-1 flex flex-col overflow-hidden">
 
-        <!-- Stat Cards -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <!-- Total Jobs -->
-            <div class="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition">
-                <div class="flex items-center justify-between text-slate-400 text-sm font-medium">
-                    <span>Total Jobs</span>
-                    <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                </div>
-                <div class="mt-3 text-3xl font-extrabold text-white" x-text="stats.total || 0">0</div>
+        <!-- Top bar -->
+        <header class="h-14 flex-shrink-0 border-b border-white/5 flex items-center px-6 justify-between" style="background: rgba(15,17,23,0.7); backdrop-filter: blur(8px);">
+            <div>
+                <h2 class="text-sm font-semibold text-white" x-text="currentTabLabel"></h2>
+                <p class="text-xs text-slate-500 font-mono" x-text="currentTabDesc"></p>
             </div>
-
-            <!-- Completed Jobs -->
-            <div class="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition">
-                <div class="flex items-center justify-between text-slate-400 text-sm font-medium">
-                    <span>Completed</span>
-                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                </div>
-                <div class="mt-3 text-3xl font-extrabold text-emerald-400" x-text="stats.completed || 0">0</div>
+            <div class="flex items-center space-x-3">
+                <div class="text-xs font-mono text-slate-500" x-text="'Hostname: ' + (health.hostname || '...')"></div>
             </div>
+        </header>
 
-            <!-- Failed Jobs -->
-            <div class="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition">
-                <div class="flex items-center justify-between text-slate-400 text-sm font-medium">
-                    <span>Failed Jobs</span>
-                    <svg class="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                </div>
-                <div class="mt-3 text-3xl font-extrabold text-rose-400" x-text="stats.failed || 0">0</div>
-            </div>
+        <!-- Scrollable content -->
+        <main class="flex-1 overflow-y-auto px-6 py-6 space-y-6">
 
-            <!-- Retried Jobs -->
-            <div class="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 transition">
-                <div class="flex items-center justify-between text-slate-400 text-sm font-medium">
-                    <span>Retried</span>
-                    <svg class="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                </div>
-                <div class="mt-3 text-3xl font-extrabold text-violet-400" x-text="stats.retried || 0">0</div>
-            </div>
-        </div>
+            <!-- ============================================================ OVERVIEW TAB ============================================================ -->
+            <div x-show="activeTab === 'overview'" x-cloak class="space-y-6">
 
-        <!-- Real-Time Chart Section -->
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
-            <div class="flex items-center justify-between mb-3">
+                <!-- Metric Cards Row 1: HTTP -->
                 <div>
-                    <h3 class="text-xs uppercase font-mono font-bold text-slate-400 tracking-wider">Real-Time Throughput & Execution Trend</h3>
-                    <p class="text-xs text-slate-500 font-mono">Live completed vs failed job throughput timeline</p>
-                </div>
-                <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs font-mono">Chart.js Live</span>
-            </div>
-            <div class="h-44 w-full">
-                <canvas id="chronosChart"></canvas>
-            </div>
-        </div>
-
-        <!-- Table Controls & Tabs -->
-        <div class="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-xl space-y-3">
-            <div class="px-6 py-4 border-b border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div class="flex space-x-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
-                    <button @click="activeTab = 'recent'; selectedIds = []; fetchData()" :class="activeTab === 'recent' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'" class="px-4 py-1.5 text-xs font-semibold rounded-lg transition">
-                        Recent Jobs
-                    </button>
-                    <button @click="activeTab = 'failed'; selectedIds = []; fetchData()" :class="activeTab === 'failed' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'" class="px-4 py-1.5 text-xs font-semibold rounded-lg transition">
-                        Failed Jobs
-                    </button>
-                </div>
-
-                <div class="flex items-center space-x-3 w-full sm:w-auto">
-                    <!-- Search Input -->
-                    <div class="relative w-full sm:w-72">
-                        <input type="text" x-model="searchQuery" placeholder="Search class, trace, tag, or ID..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 pl-9 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition font-mono">
-                        <svg class="w-4 h-4 text-slate-500 absolute left-3 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    <div class="flex items-center space-x-2 mb-3">
+                        <span class="text-xs font-mono font-bold text-slate-500 uppercase tracking-widest">HTTP Layer</span>
+                        <div class="flex-1 h-px bg-white/5"></div>
                     </div>
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div class="metric-card rounded-xl p-4">
+                            <div class="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Total Requests</div>
+                            <div class="mt-2 text-2xl font-bold text-white font-mono" x-text="(health.http?.total || 0).toLocaleString()">0</div>
+                            <div class="mt-1 text-[10px] text-slate-600">tracked requests</div>
+                        </div>
+                        <div class="metric-card rounded-xl p-4">
+                            <div class="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Avg Latency</div>
+                            <div class="mt-2 text-2xl font-bold font-mono" :class="(health.http?.avg_duration_ms || 0) > 500 ? 'text-rose-400' : (health.http?.avg_duration_ms || 0) > 200 ? 'text-amber-400' : 'text-emerald-400'" x-text="(health.http?.avg_duration_ms || 0) + ' ms'">0 ms</div>
+                            <div class="mt-1 text-[10px] text-slate-600">average response</div>
+                        </div>
+                        <div class="metric-card rounded-xl p-4">
+                            <div class="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Error Rate</div>
+                            <div class="mt-2 text-2xl font-bold font-mono" :class="(health.http?.error_rate || 0) > 5 ? 'text-rose-400' : 'text-slate-300'" x-text="(health.http?.error_rate || 0) + '%'">0%</div>
+                            <div class="mt-1 text-[10px] text-slate-600" x-text="'4xx: ' + (health.http?.errors_4xx || 0) + ' · 5xx: ' + (health.http?.errors_5xx || 0)"></div>
+                        </div>
+                        <div class="metric-card rounded-xl p-4">
+                            <div class="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Slow Requests</div>
+                            <div class="mt-2 text-2xl font-bold text-amber-400 font-mono" x-text="health.http?.slow_requests || 0">0</div>
+                            <div class="mt-1 text-[10px] text-slate-600">above threshold</div>
+                        </div>
+                    </div>
+                </div>
 
-                    <template x-if="activeTab === 'failed' && jobs.length > 0">
-                        <button @click="clearAllFailed()" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition shrink-0">
-                            Clear All Failed
-                        </button>
+                <!-- Metric Cards Row 2: Queue -->
+                <div>
+                    <div class="flex items-center space-x-2 mb-3">
+                        <span class="text-xs font-mono font-bold text-slate-500 uppercase tracking-widest">Queue Layer</span>
+                        <div class="flex-1 h-px bg-white/5"></div>
+                    </div>
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div class="metric-card rounded-xl p-4">
+                            <div class="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Total Jobs</div>
+                            <div class="mt-2 text-2xl font-bold text-white font-mono" x-text="(health.jobs?.total || 0).toLocaleString()">0</div>
+                            <div class="mt-1 text-[10px] text-slate-600">processed jobs</div>
+                        </div>
+                        <div class="metric-card rounded-xl p-4">
+                            <div class="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Completed</div>
+                            <div class="mt-2 text-2xl font-bold text-emerald-400 font-mono" x-text="health.jobs?.completed || 0">0</div>
+                            <div class="mt-1 text-[10px] text-slate-600">successful runs</div>
+                        </div>
+                        <div class="metric-card rounded-xl p-4">
+                            <div class="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Failed</div>
+                            <div class="mt-2 text-2xl font-bold text-rose-400 font-mono" x-text="health.jobs?.failed || 0">0</div>
+                            <div class="mt-1 text-[10px] text-slate-600">errored jobs</div>
+                        </div>
+                        <div class="metric-card rounded-xl p-4">
+                            <div class="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Avg Duration</div>
+                            <div class="mt-2 text-2xl font-bold text-violet-400 font-mono" x-text="(health.jobs?.avg_duration_ms || 0) + ' ms'">0 ms</div>
+                            <div class="mt-1 text-[10px] text-slate-600">avg exec time</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Metric Cards Row 3: Storage Counts -->
+                <div>
+                    <div class="flex items-center space-x-2 mb-3">
+                        <span class="text-xs font-mono font-bold text-slate-500 uppercase tracking-widest">Storage</span>
+                        <div class="flex-1 h-px bg-white/5"></div>
+                    </div>
+                    <div class="grid grid-cols-3 lg:grid-cols-5 gap-3">
+                        <template x-for="(item, key) in storageCountItems" :key="key">
+                            <div class="metric-card rounded-xl p-4 cursor-pointer" @click="switchTab(item.tab)">
+                                <div class="text-[10px] font-mono text-slate-500 uppercase tracking-wider" x-text="item.label"></div>
+                                <div class="mt-2 text-xl font-bold font-mono" :class="item.color" x-text="item.value.toLocaleString()">0</div>
+                                <div class="mt-1 text-[10px] text-indigo-500 hover:text-indigo-400">→ View</div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Throughput Chart -->
+                <div class="metric-card rounded-xl p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <div class="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider">Throughput Timeline</div>
+                            <div class="text-[10px] text-slate-600 mt-0.5">HTTP requests vs Queue jobs over time</div>
+                        </div>
+                        <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] font-mono">Live</span>
+                    </div>
+                    <div class="h-40">
+                        <canvas id="overviewChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================================ HTTP TAB ============================================================ -->
+            <div x-show="activeTab === 'http'" x-cloak class="space-y-4">
+                <div class="flex flex-wrap items-center gap-3">
+                    <!-- Filter tabs -->
+                    <div class="flex space-x-1 bg-white/5 p-1 rounded-lg border border-white/5">
+                        <template x-for="f in ['all','slow','errors']" :key="f">
+                            <button @click="httpFilter = f; fetchHttp()"
+                                    :class="httpFilter === f ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'"
+                                    class="px-3 py-1 text-xs font-semibold rounded-md transition capitalize"
+                                    x-text="f === 'all' ? 'All' : f === 'slow' ? '🐢 Slow' : '⚠️ Errors'">
+                            </button>
+                        </template>
+                    </div>
+                    <!-- Search -->
+                    <div class="relative flex-1 min-w-48">
+                        <input type="text" x-model="httpSearch" placeholder="Search path, method, status, trace..."
+                               class="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-1.5 pl-8 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition font-mono">
+                        <svg class="w-3.5 h-3.5 text-slate-600 absolute left-2.5 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- HTTP Table -->
+                <div class="metric-card rounded-xl overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="text-[10px] uppercase text-slate-500 font-mono border-b border-white/5" style="background: rgba(255,255,255,0.02);">
+                                <tr>
+                                    <th class="px-4 py-3 font-semibold">Method</th>
+                                    <th class="px-4 py-3 font-semibold">Path</th>
+                                    <th class="px-4 py-3 font-semibold">Status</th>
+                                    <th class="px-4 py-3 font-semibold">Duration</th>
+                                    <th class="px-4 py-3 font-semibold">Trace ID</th>
+                                    <th class="px-4 py-3 font-semibold">IP</th>
+                                    <th class="px-4 py-3 font-semibold">Time</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-white/[0.04]">
+                                <template x-if="filteredHttpRequests.length === 0">
+                                    <tr>
+                                        <td colspan="7" class="px-4 py-12 text-center text-slate-600">
+                                            <div class="text-2xl mb-2">🌐</div>
+                                            No HTTP requests captured yet. Add TraceMiddleware to your server.
+                                        </td>
+                                    </tr>
+                                </template>
+                                <template x-for="req in filteredHttpRequests" :key="req.trace_id">
+                                    <tr class="hover:bg-white/[0.03] transition row-fade">
+                                        <td class="px-4 py-2.5">
+                                            <span class="px-2 py-0.5 rounded font-mono font-bold text-[10px]"
+                                                  :class="{
+                                                    'bg-emerald-500/15 text-emerald-400': req.method === 'GET',
+                                                    'bg-blue-500/15 text-blue-400': req.method === 'POST',
+                                                    'bg-amber-500/15 text-amber-400': req.method === 'PUT' || req.method === 'PATCH',
+                                                    'bg-rose-500/15 text-rose-400': req.method === 'DELETE',
+                                                    'bg-slate-500/15 text-slate-400': !['GET','POST','PUT','PATCH','DELETE'].includes(req.method)
+                                                  }"
+                                                  x-text="req.method">
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-2.5 font-mono">
+                                            <span class="block truncate max-w-[280px] text-slate-200" :title="req.uri" x-text="req.path || req.uri"></span>
+                                        </td>
+                                        <td class="px-4 py-2.5">
+                                            <span class="px-2 py-0.5 rounded-full font-mono font-bold text-[10px]"
+                                                  :class="{
+                                                    'bg-emerald-500/15 text-emerald-400': parseInt(req.status_code) < 300,
+                                                    'bg-amber-500/15 text-amber-400': parseInt(req.status_code) >= 300 && parseInt(req.status_code) < 400,
+                                                    'bg-orange-500/15 text-orange-400': parseInt(req.status_code) >= 400 && parseInt(req.status_code) < 500,
+                                                    'bg-rose-500/15 text-rose-400': parseInt(req.status_code) >= 500
+                                                  }"
+                                                  x-text="req.status_code">
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-2.5 font-mono whitespace-nowrap">
+                                            <span :class="parseFloat(req.duration_ms) > 500 ? 'text-rose-400 font-bold' : parseFloat(req.duration_ms) > 200 ? 'text-amber-400' : 'text-emerald-400'"
+                                                  x-text="req.duration_ms + ' ms'"></span>
+                                            <template x-if="req.is_slow === '1'">
+                                                <span class="ml-1 text-[9px] px-1 bg-amber-500/15 text-amber-400 rounded">SLOW</span>
+                                            </template>
+                                        </td>
+                                        <td class="px-4 py-2.5 font-mono">
+                                            <button @click="openTraceModal(req.trace_id)"
+                                                    class="text-indigo-400 hover:text-indigo-300 truncate max-w-[120px] block text-left transition"
+                                                    :title="req.trace_id"
+                                                    x-text="req.trace_id ? req.trace_id.substring(0, 18) + '...' : '-'">
+                                            </button>
+                                        </td>
+                                        <td class="px-4 py-2.5 font-mono text-slate-500 text-[11px]" x-text="req.ip || '-'"></td>
+                                        <td class="px-4 py-2.5 text-slate-500 whitespace-nowrap" x-text="formatTime(req.created_at)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================================ QUEUE TAB ============================================================ -->
+            <div x-show="activeTab === 'queue'" x-cloak class="space-y-4">
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="flex space-x-1 bg-white/5 p-1 rounded-lg border border-white/5">
+                        <button @click="jobTab = 'recent'; selectedIds = []; fetchJobs()" :class="jobTab === 'recent' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'" class="px-3 py-1 text-xs font-semibold rounded-md transition">Recent</button>
+                        <button @click="jobTab = 'failed'; selectedIds = []; fetchJobs()" :class="jobTab === 'failed' ? 'bg-rose-600 text-white shadow' : 'text-slate-400 hover:text-white'" class="px-3 py-1 text-xs font-semibold rounded-md transition">Failed</button>
+                    </div>
+                    <div class="relative flex-1 min-w-48">
+                        <input type="text" x-model="jobSearch" placeholder="Search class, trace, queue, tag..."
+                               class="w-full bg-white/5 border border-white/8 rounded-lg px-3 py-1.5 pl-8 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition font-mono">
+                        <svg class="w-3.5 h-3.5 text-slate-600 absolute left-2.5 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </div>
+                    <template x-if="jobTab === 'failed' && jobs.length > 0">
+                        <button @click="clearAllFailed()" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition">Clear All Failed</button>
+                    </template>
+                </div>
+
+                <!-- Batch actions bar -->
+                <template x-if="selectedIds.length > 0">
+                    <div class="p-3 bg-indigo-950/60 border border-indigo-800/40 rounded-xl flex items-center justify-between font-mono text-xs text-indigo-200">
+                        <span x-text="selectedIds.length + ' selected'"></span>
+                        <div class="flex space-x-2">
+                            <button @click="batchRetrySelected()" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition">Retry (<span x-text="selectedIds.length"></span>)</button>
+                            <button @click="batchDeleteSelected()" class="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition">Delete (<span x-text="selectedIds.length"></span>)</button>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Jobs Table -->
+                <div class="metric-card rounded-xl overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="text-[10px] uppercase text-slate-500 font-mono border-b border-white/5" style="background: rgba(255,255,255,0.02);">
+                                <tr>
+                                    <th class="px-3 py-3 w-8">
+                                        <input type="checkbox" @change="toggleSelectAll()" :checked="isAllSelected()" class="rounded border-slate-700 bg-transparent text-indigo-600 focus:ring-0 cursor-pointer">
+                                    </th>
+                                    <th class="px-4 py-3 font-semibold">Job ID</th>
+                                    <th class="px-4 py-3 font-semibold">Trace ID</th>
+                                    <th class="px-4 py-3 font-semibold">Class</th>
+                                    <th class="px-4 py-3 font-semibold">Queue</th>
+                                    <th class="px-4 py-3 font-semibold">Status</th>
+                                    <th class="px-4 py-3 font-semibold">Duration</th>
+                                    <th class="px-4 py-3 font-semibold">Time</th>
+                                    <th class="px-4 py-3 text-right font-semibold">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-white/[0.04]">
+                                <template x-if="filteredJobs.length === 0">
+                                    <tr>
+                                        <td colspan="9" class="px-4 py-12 text-center text-slate-600">
+                                            <div class="text-2xl mb-2">📦</div>
+                                            No jobs matching current filter.
+                                        </td>
+                                    </tr>
+                                </template>
+                                <template x-for="job in filteredJobs" :key="job.id">
+                                    <tr class="hover:bg-white/[0.03] transition row-fade">
+                                        <td class="px-3 py-2.5">
+                                            <input type="checkbox" :value="job.id" x-model="selectedIds" class="rounded border-slate-700 bg-transparent text-indigo-600 focus:ring-0 cursor-pointer">
+                                        </td>
+                                        <td class="px-4 py-2.5 font-mono text-indigo-400">
+                                            <span class="block truncate max-w-[100px]" :title="job.id" x-text="job.id"></span>
+                                        </td>
+                                        <td class="px-4 py-2.5 font-mono">
+                                            <template x-if="job.trace_id">
+                                                <button @click="openTraceModal(job.trace_id)"
+                                                        class="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] inline-block truncate max-w-[130px] hover:bg-indigo-500/20 transition"
+                                                        :title="job.trace_id" x-text="job.trace_id">
+                                                </button>
+                                            </template>
+                                            <template x-if="!job.trace_id"><span class="text-slate-700">—</span></template>
+                                        </td>
+                                        <td class="px-4 py-2.5 font-medium text-white">
+                                            <span class="block truncate max-w-[180px]" :title="job.job_class" x-text="job.job_class"></span>
+                                        </td>
+                                        <td class="px-4 py-2.5 whitespace-nowrap">
+                                            <span class="px-2 py-0.5 rounded bg-white/5 text-[10px] font-mono text-slate-400" x-text="job.queue || 'default'"></span>
+                                        </td>
+                                        <td class="px-4 py-2.5 whitespace-nowrap">
+                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border"
+                                                  :class="{
+                                                    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20': job.status === 'completed',
+                                                    'bg-rose-500/10 text-rose-400 border-rose-500/20': job.status === 'failed',
+                                                    'bg-amber-500/10 text-amber-400 border-amber-500/20': job.status === 'processing',
+                                                    'bg-violet-500/10 text-violet-400 border-violet-500/20': job.status === 'retried'
+                                                  }"
+                                                  x-text="job.status">
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-2.5 font-mono whitespace-nowrap" x-text="job.duration_ms ? job.duration_ms + ' ms' : '—'"></td>
+                                        <td class="px-4 py-2.5 text-slate-500 whitespace-nowrap" x-text="formatTime(job.created_at)"></td>
+                                        <td class="px-4 py-2.5 text-right space-x-1.5 whitespace-nowrap">
+                                            <button @click="openJobModal(job)" class="px-2 py-1 bg-white/5 hover:bg-white/10 text-xs rounded-lg transition">Inspect</button>
+                                            <template x-if="job.status === 'failed'">
+                                                <button @click="retryJob(job.id)" class="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-xs rounded-lg text-white transition">Retry</button>
+                                            </template>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================================ SLOW QUERIES TAB ============================================================ -->
+            <div x-show="activeTab === 'queries'" x-cloak class="space-y-4">
+                <div class="metric-card rounded-xl overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="text-[10px] uppercase text-slate-500 font-mono border-b border-white/5" style="background: rgba(255,255,255,0.02);">
+                                <tr>
+                                    <th class="px-4 py-3 font-semibold">SQL</th>
+                                    <th class="px-4 py-3 font-semibold">Duration</th>
+                                    <th class="px-4 py-3 font-semibold">Bindings</th>
+                                    <th class="px-4 py-3 font-semibold">Time</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-white/[0.04]">
+                                <template x-if="slowQueries.length === 0">
+                                    <tr>
+                                        <td colspan="4" class="px-4 py-12 text-center text-slate-600">
+                                            <div class="text-2xl mb-2">⚡</div>
+                                            No slow queries detected. Configure threshold in chronos.php.
+                                        </td>
+                                    </tr>
+                                </template>
+                                <template x-for="(q, idx) in slowQueries" :key="q.id || idx">
+                                    <tr class="hover:bg-white/[0.03] transition row-fade">
+                                        <td class="px-4 py-3 font-mono max-w-md">
+                                            <div class="text-cyan-300 truncate" :title="q.sql" x-text="q.sql"></div>
+                                        </td>
+                                        <td class="px-4 py-3 font-mono whitespace-nowrap">
+                                            <span class="text-rose-400 font-bold" x-text="q.duration_ms + ' ms'"></span>
+                                        </td>
+                                        <td class="px-4 py-3 font-mono text-slate-500 max-w-[180px]">
+                                            <span class="truncate block" :title="q.bindings" x-text="q.bindings || '[]'"></span>
+                                        </td>
+                                        <td class="px-4 py-3 text-slate-500 whitespace-nowrap" x-text="formatTime(q.created_at)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================================ LOGS TAB ============================================================ -->
+            <div x-show="activeTab === 'logs'" x-cloak class="space-y-4">
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="flex space-x-1 bg-white/5 p-1 rounded-lg border border-white/5">
+                        <template x-for="lvl in ['warning','error','critical','emergency']" :key="lvl">
+                            <button @click="logMinLevel = lvl; fetchLogs()"
+                                    :class="logMinLevel === lvl ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'"
+                                    class="px-3 py-1 text-xs font-semibold rounded-md transition capitalize"
+                                    x-text="lvl">
+                            </button>
+                        </template>
+                    </div>
+                    <div class="ml-auto">
+                        <button @click="clearAllLogs()" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition">Clear All Logs</button>
+                    </div>
+                </div>
+
+                <!-- Logs list -->
+                <div class="space-y-2">
+                    <template x-if="logs.length === 0">
+                        <div class="metric-card rounded-xl p-12 text-center text-slate-600">
+                            <div class="text-2xl mb-2">📋</div>
+                            No logs captured yet. Add ChronosMonologHandler to your logger config.
+                        </div>
+                    </template>
+                    <template x-for="(log, idx) in logs" :key="log.id || idx">
+                        <div class="metric-card rounded-xl p-4 row-fade">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="flex items-center space-x-2 flex-shrink-0">
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase"
+                                          :class="{
+                                            'bg-amber-500/20 text-amber-300 border border-amber-500/30': log.level === 'WARNING',
+                                            'bg-rose-500/20 text-rose-300 border border-rose-500/30': log.level === 'ERROR',
+                                            'bg-red-600/20 text-red-200 border border-red-600/30': log.level === 'CRITICAL' || log.level === 'ALERT' || log.level === 'EMERGENCY',
+                                            'bg-blue-500/20 text-blue-300 border border-blue-500/30': log.level === 'INFO',
+                                            'bg-slate-500/20 text-slate-400 border border-slate-500/30': !['WARNING','ERROR','CRITICAL','ALERT','EMERGENCY','INFO'].includes(log.level)
+                                          }"
+                                          x-text="log.level">
+                                    </span>
+                                    <span class="text-[10px] font-mono text-slate-600" x-text="log.channel || 'app'"></span>
+                                </div>
+                                <div class="flex items-center space-x-3 flex-shrink-0 text-[10px] font-mono text-slate-600">
+                                    <template x-if="log.trace_id">
+                                        <button @click="openTraceModal(log.trace_id)"
+                                                class="text-indigo-500 hover:text-indigo-400 transition truncate max-w-[140px]"
+                                                :title="log.trace_id"
+                                                x-text="log.trace_id">
+                                        </button>
+                                    </template>
+                                    <span x-text="log.datetime || formatTime(log.created_at)"></span>
+                                </div>
+                            </div>
+                            <div class="mt-2 text-sm text-slate-200 font-mono leading-relaxed break-words" x-text="log.message"></div>
+                            <template x-if="log.context && log.context !== '{}'">
+                                <details class="mt-2">
+                                    <summary class="text-[10px] font-mono text-slate-600 cursor-pointer hover:text-slate-400 transition">Context</summary>
+                                    <pre class="mt-1 text-[10px] font-mono text-slate-500 bg-white/[0.02] p-2 rounded-lg overflow-x-auto border border-white/5" x-text="formatJson(log.context)"></pre>
+                                </details>
+                            </template>
+                        </div>
                     </template>
                 </div>
             </div>
 
-            <!-- Floating Batch Actions Bar -->
-            <template x-if="selectedIds.length > 0">
-                <div class="mx-6 p-3 bg-indigo-950/60 border border-indigo-800/50 rounded-xl flex items-center justify-between font-mono text-xs text-indigo-200">
-                    <span x-text="selectedIds.length + ' item(s) selected'"></span>
-                    <div class="flex space-x-2">
-                        <button @click="batchRetrySelected()" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition font-semibold">
-                            Retry Selected (<span x-text="selectedIds.length"></span>)
-                        </button>
-                        <button @click="batchDeleteSelected()" class="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition font-semibold">
-                            Delete Selected (<span x-text="selectedIds.length"></span>)
-                        </button>
+        </main>
+    </div>
+</div>
+
+<!-- ============================================================ TRACE MODAL ============================================================ -->
+<div x-show="traceModalOpen" x-cloak
+     class="fixed inset-0 z-50 flex items-center justify-center p-4"
+     style="background: rgba(8,11,16,0.85); backdrop-filter: blur(8px);"
+     @keydown.escape.window="traceModalOpen = false">
+    <div class="bg-[#0f1117] border border-white/10 rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl"
+         @click.outside="traceModalOpen = false">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-white/5">
+            <div>
+                <div class="text-sm font-bold text-white">Trace Explorer</div>
+                <div class="text-xs font-mono text-slate-500 mt-0.5" x-text="traceId"></div>
+            </div>
+            <button @click="traceModalOpen = false" class="text-slate-500 hover:text-white transition text-xl leading-none">&times;</button>
+        </div>
+        <div class="flex-1 overflow-y-auto px-6 py-4 space-y-2">
+            <template x-if="traceSpans.length === 0">
+                <div class="text-center py-12 text-slate-600 font-mono text-xs">No spans found for this trace.</div>
+            </template>
+            <template x-for="(span, idx) in traceSpans" :key="span.id || idx">
+                <div class="flex items-center justify-between text-xs font-mono p-3 rounded-xl border transition"
+                     :class="span.type === 'db_query'
+                        ? 'bg-cyan-950/30 border-cyan-800/40 ml-6'
+                        : span.type === 'http'
+                            ? 'bg-indigo-950/30 border-indigo-800/40'
+                            : 'bg-white/[0.03] border-white/[0.06]'">
+                    <div class="flex items-center space-x-2 min-w-0">
+                        <span class="text-slate-600 font-bold flex-shrink-0" x-text="'#' + (idx + 1)"></span>
+                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold flex-shrink-0"
+                              :class="{
+                                'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30': span.type === 'db_query',
+                                'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30': span.type !== 'db_query'
+                              }"
+                              x-text="span.type === 'db_query' ? 'SQL' : 'JOB'">
+                        </span>
+                        <span class="truncate text-white" x-text="span.job_class || span.sql"></span>
+                    </div>
+                    <div class="flex items-center space-x-3 flex-shrink-0 ml-3">
+                        <span class="text-amber-300 text-[10px]" x-text="span.wait_time_ms ? span.wait_time_ms + 'ms wait' : ''"></span>
+                        <span class="text-emerald-300 text-[10px]" x-text="(span.duration_ms || '0') + 'ms'"></span>
+                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold border uppercase"
+                              :class="{
+                                'bg-emerald-500/10 text-emerald-400 border-emerald-500/20': span.status === 'completed',
+                                'bg-rose-500/10 text-rose-400 border-rose-500/20': span.status === 'failed',
+                                'bg-amber-500/10 text-amber-400 border-amber-500/20': span.status === 'processing',
+                              }"
+                              x-text="span.status || 'OK'">
+                        </span>
                     </div>
                 </div>
             </template>
-
-            <!-- Jobs Table -->
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-sm text-slate-300 border-collapse">
-                    <thead class="bg-slate-950/50 text-xs uppercase text-slate-400 font-mono border-b border-slate-800">
-                        <tr>
-                            <th class="px-3 py-3 w-8 text-center">
-                                <input type="checkbox" @change="toggleSelectAll()" :checked="isAllSelected()" class="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0 cursor-pointer">
-                            </th>
-                            <th class="px-4 py-3 font-semibold">Job ID</th>
-                            <th class="px-4 py-3 font-semibold">Trace ID</th>
-                            <th class="px-4 py-3 font-semibold">Class</th>
-                            <th class="px-4 py-3 font-semibold">Queue</th>
-                            <th class="px-4 py-3 font-semibold">Status</th>
-                            <th class="px-4 py-3 font-semibold">Duration</th>
-                            <th class="px-4 py-3 font-semibold">Time</th>
-                            <th class="px-4 py-3 text-right font-semibold">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-800/60">
-                        <template x-if="filteredJobs.length === 0">
-                            <tr>
-                                <td colspan="9" class="px-4 py-12 text-center text-slate-500">
-                                    No <span x-text="activeTab"></span> jobs matching filter.
-                                </td>
-                            </tr>
-                        </template>
-                        <template x-for="job in filteredJobs" :key="job.id">
-                            <tr class="hover:bg-slate-800/40 transition">
-                                <td class="px-3 py-3 text-center">
-                                    <input type="checkbox" :value="job.id" x-model="selectedIds" class="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0 cursor-pointer">
-                                </td>
-                                <td class="px-4 py-3 font-mono text-xs text-indigo-300">
-                                    <span class="block truncate max-w-[110px]" :title="job.id" x-text="job.id"></span>
-                                </td>
-                                <td class="px-4 py-3 font-mono text-xs">
-                                    <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[11px] inline-block truncate max-w-[140px]" :title="job.trace_id" x-text="job.trace_id || '-'"></span>
-                                </td>
-                                <td class="px-4 py-3 font-medium text-white">
-                                    <span class="block truncate max-w-[200px]" :title="job.job_class" x-text="job.job_class"></span>
-                                </td>
-                                <td class="px-4 py-3 whitespace-nowrap">
-                                    <span class="px-2 py-1 rounded bg-slate-800 text-xs font-mono text-slate-300" x-text="job.queue || 'default'"></span>
-                                </td>
-                                <td class="px-4 py-3 whitespace-nowrap">
-                                    <span :class="{
-                                        'bg-emerald-500/10 text-emerald-400 border-emerald-500/20': job.status === 'completed',
-                                        'bg-rose-500/10 text-rose-400 border-rose-500/20': job.status === 'failed',
-                                        'bg-amber-500/10 text-amber-400 border-amber-500/20': job.status === 'processing',
-                                        'bg-violet-500/10 text-violet-400 border-violet-500/20': job.status === 'retried'
-                                    }" class="px-2.5 py-0.5 rounded-full text-xs font-semibold border" x-text="job.status"></span>
-                                </td>
-                                <td class="px-4 py-3 font-mono text-xs whitespace-nowrap" x-text="job.duration_ms ? job.duration_ms + ' ms' : '-'"></td>
-                                <td class="px-4 py-3 text-xs text-slate-400 whitespace-nowrap" x-text="formatTime(job.created_at)"></td>
-                                <td class="px-4 py-3 text-right space-x-2 whitespace-nowrap">
-                                    <button @click="openModal(job)" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded-lg text-slate-200 transition">
-                                        Inspect
-                                    </button>
-                                    <template x-if="job.status === 'failed'">
-                                        <button @click="retryJob(job.id)" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-xs font-medium rounded-lg text-white transition">
-                                            Retry
-                                        </button>
-                                    </template>
-                                </td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-    </main>
-
-    <!-- Inspection Modal -->
-    <div x-show="modalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm" @keydown.escape.window="modalOpen = false">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full p-6 space-y-6 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" @click.outside="modalOpen = false">
-            <div class="flex items-center justify-between border-b border-slate-800 pb-4">
-                <div>
-                    <div class="flex items-center space-x-2">
-                        <h3 class="text-lg font-bold text-white" x-text="selectedJob?.job_class"></h3>
-                        <template x-if="selectedJob?.trace_id">
-                            <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs font-mono" x-text="selectedJob?.trace_id"></span>
-                        </template>
-                    </div>
-                    <p class="text-xs font-mono text-slate-400 mt-0.5" x-text="'ID: ' + selectedJob?.id"></p>
-                </div>
-                <button @click="modalOpen = false" class="text-slate-400 hover:text-white">&times;</button>
-            </div>
-
-            <div class="overflow-y-auto space-y-5 flex-1">
-
-                <!-- System Diagnostics Grid -->
-                <div>
-                    <h4 class="text-xs uppercase font-mono font-bold text-slate-400 mb-2">System Diagnostics</h4>
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <div class="p-3 bg-slate-950 rounded-xl border border-slate-800">
-                            <div class="text-[10px] font-mono text-slate-500 uppercase">Memory Peak</div>
-                            <div class="text-sm font-bold text-indigo-300 font-mono mt-0.5" x-text="selectedJob?.memory_peak_mb || '-'"></div>
-                        </div>
-                        <div class="p-3 bg-slate-950 rounded-xl border border-slate-800">
-                            <div class="text-[10px] font-mono text-slate-500 uppercase">Queue Wait Time</div>
-                            <div class="text-sm font-bold text-amber-300 font-mono mt-0.5" x-text="selectedJob?.wait_time_ms ? selectedJob?.wait_time_ms + ' ms' : '-'"></div>
-                        </div>
-                        <div class="p-3 bg-slate-950 rounded-xl border border-slate-800">
-                            <div class="text-[10px] font-mono text-slate-500 uppercase">Execution Time</div>
-                            <div class="text-sm font-bold text-emerald-300 font-mono mt-0.5" x-text="selectedJob?.duration_ms ? selectedJob?.duration_ms + ' ms' : '-'"></div>
-                        </div>
-                        <div class="p-3 bg-slate-950 rounded-xl border border-slate-800">
-                            <div class="text-[10px] font-mono text-slate-500 uppercase">Worker Host / PID</div>
-                            <div class="text-xs font-semibold text-slate-300 font-mono mt-0.5 truncate" x-text="(selectedJob?.hostname || 'local') + ' (' + (selectedJob?.pid || '-') + ')'"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- DTO Tags -->
-                <template x-if="selectedJob?.tags && parseTags(selectedJob?.tags).length > 0">
-                    <div>
-                        <h4 class="text-xs uppercase font-mono font-bold text-slate-400 mb-1.5">Context Tags</h4>
-                        <div class="flex flex-wrap gap-2">
-                            <template x-for="tag in parseTags(selectedJob?.tags)" :key="tag.key">
-                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono">
-                                    <span class="text-slate-500 mr-1" x-text="tag.key + ':'"></span>
-                                    <span class="text-indigo-300 font-semibold" x-text="tag.value"></span>
-                                </span>
-                            </template>
-                        </div>
-                    </div>
-                </template>
-
-                <!-- Trace Waterfall Execution Tree -->
-                <template x-if="traceJobs.length > 0">
-                    <div>
-                        <div class="flex items-center justify-between mb-2">
-                            <h4 class="text-xs uppercase font-mono font-bold text-slate-400">Trace Execution Tree (Waterfall Timeline)</h4>
-                            <span class="text-[10px] font-mono text-indigo-400" x-text="traceJobs.length + ' event(s) in trace'"></span>
-                        </div>
-                        <div class="space-y-2 bg-slate-950 p-4 rounded-xl border border-slate-800 max-h-72 overflow-y-auto">
-                            <template x-for="(tJob, idx) in traceJobs" :key="tJob.id || idx">
-                                <div :class="tJob.type === 'db_query' ? 'bg-cyan-950/30 border-cyan-800/50 ml-4' : 'bg-slate-900/60 border-slate-800/80'" class="flex items-center justify-between text-xs font-mono p-2.5 rounded-lg border">
-                                    <div class="flex items-center space-x-2 truncate">
-                                        <span class="text-slate-500 font-bold" x-text="'#' + (idx + 1)"></span>
-                                        <template x-if="tJob.type === 'db_query'">
-                                            <span class="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-bold border border-cyan-500/30">DB</span>
-                                        </template>
-                                        <template x-if="tJob.type !== 'db_query'">
-                                            <span class="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px] font-bold border border-indigo-500/30">JOB</span>
-                                        </template>
-                                        <span class="font-semibold text-white truncate max-w-sm" x-text="tJob.job_class"></span>
-                                        <template x-if="tJob.id === selectedJob?.id">
-                                            <span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px]">active</span>
-                                        </template>
-                                    </div>
-                                    <div class="flex items-center space-x-3 shrink-0">
-                                        <template x-if="tJob.type !== 'db_query'">
-                                            <span class="text-amber-300 text-[11px]" x-text="'Wait: ' + (tJob.wait_time_ms || '0') + 'ms'"></span>
-                                        </template>
-                                        <span class="text-emerald-300 text-[11px]" x-text="'Run: ' + (tJob.duration_ms || '0') + 'ms'"></span>
-                                        <span :class="{
-                                            'text-emerald-400 bg-emerald-500/10 border-emerald-500/20': tJob.status === 'completed',
-                                            'text-rose-400 bg-rose-500/10 border-rose-500/20': tJob.status === 'failed',
-                                            'text-amber-400 bg-amber-500/10 border-amber-500/20': tJob.status === 'processing'
-                                        }" class="px-2 py-0.5 rounded text-[10px] font-bold border uppercase" x-text="tJob.status || 'OK'"></span>
-                                    </div>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-                </template>
-
-                <!-- Payload -->
-                <div>
-                    <h4 class="text-xs uppercase font-mono font-bold text-slate-400 mb-1">Payload</h4>
-                    <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-emerald-300 overflow-x-auto border border-slate-800" x-text="selectedJob?.payload"></pre>
-                </div>
-
-                <!-- Exception (if failed) -->
-                <template x-if="selectedJob?.exception_message">
-                    <div>
-                        <h4 class="text-xs uppercase font-mono font-bold text-rose-400 mb-1">Exception Message</h4>
-                        <div class="bg-rose-950/30 border border-rose-900/50 p-3 rounded-xl text-xs font-mono text-rose-300" x-text="selectedJob?.exception_message"></div>
-
-                        <h4 class="text-xs uppercase font-mono font-bold text-slate-400 mt-4 mb-1">Stack Trace</h4>
-                        <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-slate-400 overflow-x-auto border border-slate-800 max-h-60" x-text="selectedJob?.exception_trace"></pre>
-                    </div>
-                </template>
-            </div>
-
-            <div class="border-t border-slate-800 pt-4 flex justify-end space-x-3">
-                <template x-if="selectedJob?.status === 'failed'">
-                    <button @click="retryJob(selectedJob.id); modalOpen = false" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition">
-                        Retry Job Now
-                    </button>
-                </template>
-                <button @click="modalOpen = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition">
-                    Close
-                </button>
-            </div>
         </div>
     </div>
+</div>
 
-    <script>
-        function chronosApp() {
-            return {
-                stats: {},
-                jobs: [],
-                activeTab: 'recent',
-                loading: false,
-                modalOpen: false,
-                selectedJob: null,
-                traceJobs: [],
-                searchQuery: '',
-                selectedIds: [],
-                chart: null,
+<!-- ============================================================ JOB DETAIL MODAL ============================================================ -->
+<div x-show="jobModalOpen" x-cloak
+     class="fixed inset-0 z-50 flex items-center justify-center p-4"
+     style="background: rgba(8,11,16,0.85); backdrop-filter: blur(8px);"
+     @keydown.escape.window="jobModalOpen = false">
+    <div class="bg-[#0f1117] border border-white/10 rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl"
+         @click.outside="jobModalOpen = false">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-white/5">
+            <div>
+                <div class="flex items-center space-x-2">
+                    <div class="text-sm font-bold text-white" x-text="selectedJob?.job_class"></div>
+                    <template x-if="selectedJob?.trace_id">
+                        <button @click="traceId = selectedJob.trace_id; fetchTrace(); jobModalOpen = false; traceModalOpen = true"
+                                class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] font-mono hover:bg-indigo-500/20 transition"
+                                x-text="selectedJob?.trace_id">
+                        </button>
+                    </template>
+                </div>
+                <div class="text-xs font-mono text-slate-500 mt-0.5" x-text="'ID: ' + selectedJob?.id"></div>
+            </div>
+            <button @click="jobModalOpen = false" class="text-slate-500 hover:text-white transition text-xl leading-none">&times;</button>
+        </div>
+        <div class="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+            <!-- Diagnostics -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div class="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
+                    <div class="text-[9px] font-mono text-slate-600 uppercase tracking-wider">Memory Peak</div>
+                    <div class="text-sm font-bold text-indigo-300 font-mono mt-1" x-text="selectedJob?.memory_peak_mb || '—'"></div>
+                </div>
+                <div class="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
+                    <div class="text-[9px] font-mono text-slate-600 uppercase tracking-wider">Wait Time</div>
+                    <div class="text-sm font-bold text-amber-300 font-mono mt-1" x-text="selectedJob?.wait_time_ms ? selectedJob.wait_time_ms + ' ms' : '—'"></div>
+                </div>
+                <div class="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
+                    <div class="text-[9px] font-mono text-slate-600 uppercase tracking-wider">Duration</div>
+                    <div class="text-sm font-bold text-emerald-300 font-mono mt-1" x-text="selectedJob?.duration_ms ? selectedJob.duration_ms + ' ms' : '—'"></div>
+                </div>
+                <div class="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
+                    <div class="text-[9px] font-mono text-slate-600 uppercase tracking-wider">Worker / PID</div>
+                    <div class="text-xs font-bold text-slate-300 font-mono mt-1 truncate" x-text="(selectedJob?.hostname || 'local') + ' (' + (selectedJob?.pid || '—') + ')'"></div>
+                </div>
+            </div>
+            <!-- Tags -->
+            <template x-if="selectedJob?.tags && parseTags(selectedJob?.tags).length > 0">
+                <div>
+                    <div class="text-[10px] font-mono font-bold text-slate-500 uppercase mb-2">Context Tags</div>
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="tag in parseTags(selectedJob?.tags)" :key="tag.key">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.07] text-xs font-mono">
+                                <span class="text-slate-500 mr-1" x-text="tag.key + ':'"></span>
+                                <span class="text-indigo-300 font-semibold" x-text="tag.value"></span>
+                            </span>
+                        </template>
+                    </div>
+                </div>
+            </template>
+            <!-- Payload -->
+            <div>
+                <div class="text-[10px] font-mono font-bold text-slate-500 uppercase mb-2">Payload</div>
+                <pre class="bg-white/[0.02] border border-white/[0.05] p-4 rounded-xl text-xs font-mono text-emerald-300 overflow-x-auto" x-text="selectedJob?.payload"></pre>
+            </div>
+            <!-- Exception -->
+            <template x-if="selectedJob?.exception_message">
+                <div class="space-y-3">
+                    <div>
+                        <div class="text-[10px] font-mono font-bold text-rose-400 uppercase mb-2">Exception</div>
+                        <div class="bg-rose-950/30 border border-rose-900/40 p-3 rounded-xl text-xs font-mono text-rose-300" x-text="selectedJob?.exception_message"></div>
+                    </div>
+                    <div>
+                        <div class="text-[10px] font-mono font-bold text-slate-500 uppercase mb-2">Stack Trace</div>
+                        <pre class="bg-white/[0.02] border border-white/[0.05] p-4 rounded-xl text-xs font-mono text-slate-500 overflow-x-auto max-h-52" x-text="selectedJob?.exception_trace"></pre>
+                    </div>
+                </div>
+            </template>
+        </div>
+        <div class="px-6 py-4 border-t border-white/5 flex justify-end space-x-3">
+            <template x-if="selectedJob?.status === 'failed'">
+                <button @click="retryJob(selectedJob.id); jobModalOpen = false" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition">Retry Job</button>
+            </template>
+            <button @click="jobModalOpen = false" class="px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-semibold rounded-xl transition">Close</button>
+        </div>
+    </div>
+</div>
 
-                init() {
-                    this.initChart();
-                    this.fetchData();
-                    setInterval(() => this.fetchData(), 3000);
-                },
+<!-- ============================================================ JAVASCRIPT ============================================================ -->
+<script>
+function chronosApp() {
+    return {
+        // State
+        activeTab: 'overview',
+        loading: false,
+        lastUpdated: '',
 
-                get filteredJobs() {
-                    if (!this.searchQuery) return this.jobs;
-                    const q = this.searchQuery.toLowerCase();
-                    return this.jobs.filter(job => {
-                        return (job.id && job.id.toLowerCase().includes(q))
-                            || (job.trace_id && job.trace_id.toLowerCase().includes(q))
-                            || (job.job_class && job.job_class.toLowerCase().includes(q))
-                            || (job.queue && job.queue.toLowerCase().includes(q))
-                            || (job.tags && job.tags.toLowerCase().includes(q))
-                            || (job.payload && job.payload.toLowerCase().includes(q));
-                    });
-                },
+        // Health / Overview
+        health: {},
 
-                isAllSelected() {
-                    return this.filteredJobs.length > 0 && this.filteredJobs.every(j => this.selectedIds.includes(j.id));
-                },
+        // HTTP
+        httpRequests: [],
+        httpFilter: 'all',
+        httpSearch: '',
 
-                toggleSelectAll() {
-                    if (this.isAllSelected()) {
-                        this.selectedIds = [];
-                    } else {
-                        this.selectedIds = this.filteredJobs.map(j => j.id);
-                    }
-                },
+        // Queue Jobs
+        jobs: [],
+        jobTab: 'recent',
+        jobSearch: '',
+        selectedIds: [],
 
-                initChart() {
-                    const ctx = document.getElementById('chronosChart').getContext('2d');
-                    this.chart = new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: Array(10).fill(''),
-                            datasets: [
-                                {
-                                    label: 'Completed',
-                                    data: Array(10).fill(0),
-                                    borderColor: '#34d399',
-                                    backgroundColor: 'rgba(52, 211, 153, 0.1)',
-                                    fill: true,
-                                    tension: 0.4
-                                },
-                                {
-                                    label: 'Failed',
-                                    data: Array(10).fill(0),
-                                    borderColor: '#f87171',
-                                    backgroundColor: 'rgba(248, 113, 113, 0.1)',
-                                    fill: true,
-                                    tension: 0.4
-                                }
-                            ]
+        // Slow Queries
+        slowQueries: [],
+
+        // Logs
+        logs: [],
+        logMinLevel: 'warning',
+
+        // Modals
+        traceModalOpen: false,
+        traceId: '',
+        traceSpans: [],
+
+        jobModalOpen: false,
+        selectedJob: null,
+
+        // Chart
+        chart: null,
+        chartLabels: Array(15).fill(''),
+        chartHttp: Array(15).fill(0),
+        chartJobs: Array(15).fill(0),
+        prevHttpTotal: 0,
+        prevJobTotal: 0,
+
+        // ─────────────────────────────────────────────
+        // Nav items
+        // ─────────────────────────────────────────────
+        get navItems() {
+            return [
+                { id: 'overview', icon: '📊', label: 'Overview', badge: 0 },
+                { id: 'http',     icon: '🌐', label: 'HTTP Requests', badge: this.health.counts?.http_requests || 0, badgeColor: 'bg-blue-500/20 text-blue-400' },
+                { id: 'queue',    icon: '📦', label: 'Queue Jobs', badge: this.health.counts?.failed_jobs || 0, badgeColor: this.health.counts?.failed_jobs > 0 ? 'bg-rose-500/20 text-rose-400' : 'bg-slate-700 text-slate-400' },
+                { id: 'queries',  icon: '⚡', label: 'Slow Queries', badge: this.health.counts?.slow_queries || 0, badgeColor: this.health.counts?.slow_queries > 0 ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-700 text-slate-400' },
+                { id: 'logs',     icon: '📋', label: 'Logs', badge: this.health.counts?.logs || 0, badgeColor: 'bg-slate-700 text-slate-400' },
+            ];
+        },
+
+        get currentTabLabel() {
+            const labels = { overview: 'Overview', http: 'HTTP Requests', queue: 'Queue Jobs', queries: 'Slow Queries', logs: 'Application Logs' };
+            return labels[this.activeTab] || '';
+        },
+
+        get currentTabDesc() {
+            const descs = {
+                overview: 'Real-time health across all observability pillars',
+                http: 'Captured HTTP requests with latency and status breakdown',
+                queue: 'Async queue jobs — recent, failed, and retry management',
+                queries: 'Database queries that exceeded the slow threshold',
+                logs: 'Structured application logs with trace correlation',
+            };
+            return descs[this.activeTab] || '';
+        },
+
+        get storageCountItems() {
+            const c = this.health.counts || {};
+            return [
+                { label: 'HTTP Requests', value: c.http_requests || 0, color: 'text-blue-400', tab: 'http' },
+                { label: 'Recent Jobs',   value: c.recent_jobs || 0,   color: 'text-indigo-400', tab: 'queue' },
+                { label: 'Failed Jobs',   value: c.failed_jobs || 0,   color: 'text-rose-400', tab: 'queue' },
+                { label: 'Slow Queries',  value: c.slow_queries || 0,  color: 'text-amber-400', tab: 'queries' },
+                { label: 'Log Entries',   value: c.logs || 0,          color: 'text-slate-300', tab: 'logs' },
+            ];
+        },
+
+        // ─────────────────────────────────────────────
+        // Computed filters
+        // ─────────────────────────────────────────────
+        get filteredHttpRequests() {
+            if (!this.httpSearch) return this.httpRequests;
+            const q = this.httpSearch.toLowerCase();
+            return this.httpRequests.filter(r =>
+                (r.path && r.path.toLowerCase().includes(q)) ||
+                (r.uri && r.uri.toLowerCase().includes(q)) ||
+                (r.method && r.method.toLowerCase().includes(q)) ||
+                (r.status_code && r.status_code.includes(q)) ||
+                (r.trace_id && r.trace_id.toLowerCase().includes(q))
+            );
+        },
+
+        get filteredJobs() {
+            if (!this.jobSearch) return this.jobs;
+            const q = this.jobSearch.toLowerCase();
+            return this.jobs.filter(job =>
+                (job.id && job.id.toLowerCase().includes(q)) ||
+                (job.trace_id && job.trace_id.toLowerCase().includes(q)) ||
+                (job.job_class && job.job_class.toLowerCase().includes(q)) ||
+                (job.queue && job.queue.toLowerCase().includes(q)) ||
+                (job.tags && job.tags.toLowerCase().includes(q)) ||
+                (job.payload && job.payload.toLowerCase().includes(q))
+            );
+        },
+
+        // ─────────────────────────────────────────────
+        // Init
+        // ─────────────────────────────────────────────
+        init() {
+            this.initChart();
+            this.fetchAll();
+            setInterval(() => this.fetchAll(), 3000);
+        },
+
+        switchTab(tab) {
+            this.activeTab = tab;
+            if (tab === 'http')    this.fetchHttp();
+            if (tab === 'queue')   this.fetchJobs();
+            if (tab === 'queries') this.fetchSlowQueries();
+            if (tab === 'logs')    this.fetchLogs();
+        },
+
+        // ─────────────────────────────────────────────
+        // Chart
+        // ─────────────────────────────────────────────
+        initChart() {
+            const ctx = document.getElementById('overviewChart');
+            if (!ctx) return;
+            this.chart = new Chart(ctx.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: [...this.chartLabels],
+                    datasets: [
+                        {
+                            label: 'HTTP Requests',
+                            data: [...this.chartHttp],
+                            borderColor: '#818cf8',
+                            backgroundColor: 'rgba(129,140,248,0.08)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 2,
+                            borderWidth: 1.5,
                         },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: { labels: { color: '#94a3b8', font: { family: 'monospace', size: 11 } } }
-                            },
-                            scales: {
-                                x: { grid: { color: '#1e293b' }, ticks: { color: '#64748b' } },
-                                y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b' }, beginAtZero: true }
-                            }
-                        }
-                    });
+                        {
+                            label: 'Queue Jobs',
+                            data: [...this.chartJobs],
+                            borderColor: '#34d399',
+                            backgroundColor: 'rgba(52,211,153,0.06)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 2,
+                            borderWidth: 1.5,
+                        },
+                    ]
                 },
-
-                updateChartData(completed, failed) {
-                    if (!this.chart) return;
-                    const nowLabel = new Date().toLocaleTimeString();
-                    this.chart.data.labels.push(nowLabel);
-                    this.chart.data.labels.shift();
-
-                    this.chart.data.datasets[0].data.push(completed);
-                    this.chart.data.datasets[0].data.shift();
-
-                    this.chart.data.datasets[1].data.push(failed);
-                    this.chart.data.datasets[1].data.shift();
-
-                    this.chart.update('none');
-                },
-
-                async fetchData() {
-                    this.loading = true;
-                    try {
-                        const [statsRes, jobsRes] = await Promise.all([
-                            fetch('/chronos/api/stats'),
-                            fetch(`/chronos/api/jobs?type=${this.activeTab}`)
-                        ]);
-
-                        const statsData = await statsRes.json();
-                        const jobsData = await jobsRes.json();
-
-                        if (statsData.status === 'success') {
-                            this.stats = statsData.data;
-                            this.updateChartData(this.stats.completed || 0, this.stats.failed || 0);
-                        }
-                        if (jobsData.status === 'success') {
-                            this.jobs = jobsData.data;
-                        }
-                    } catch (e) {
-                        console.error('Chronos fetch error:', e);
-                    } finally {
-                        this.loading = false;
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 300 },
+                    plugins: {
+                        legend: { labels: { color: '#64748b', font: { family: 'JetBrains Mono', size: 10 }, boxWidth: 10 } }
+                    },
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#334155', font: { size: 9 } } },
+                        y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#334155', font: { size: 9 } }, beginAtZero: true }
                     }
-                },
-
-                async retryJob(id) {
-                    try {
-                        const res = await fetch(`/chronos/api/jobs/${id}/retry`, { method: 'POST' });
-                        const data = await res.json();
-                        alert(data.message || 'Job re-queued!');
-                        this.fetchData();
-                    } catch (e) {
-                        alert('Retry error: ' + e.message);
-                    }
-                },
-
-                async batchRetrySelected() {
-                    if (this.selectedIds.length === 0) return;
-                    try {
-                        const res = await fetch('/chronos/api/jobs/batch-retry', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ ids: this.selectedIds })
-                        });
-                        const data = await res.json();
-                        alert(data.message || 'Selected jobs re-queued!');
-                        this.selectedIds = [];
-                        this.fetchData();
-                    } catch (e) {
-                        alert('Batch retry error: ' + e.message);
-                    }
-                },
-
-                async batchDeleteSelected() {
-                    if (this.selectedIds.length === 0) return;
-                    if (!confirm(`Delete ${this.selectedIds.length} selected job(s)?`)) return;
-                    try {
-                        const res = await fetch('/chronos/api/jobs/batch-delete', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ ids: this.selectedIds })
-                        });
-                        const data = await res.json();
-                        alert(data.message || 'Selected jobs deleted!');
-                        this.selectedIds = [];
-                        this.fetchData();
-                    } catch (e) {
-                        alert('Batch delete error: ' + e.message);
-                    }
-                },
-
-                async clearAllFailed() {
-                    if (!confirm('Clear all failed jobs from Chronos history?')) return;
-                    try {
-                        await fetch('/chronos/api/jobs/failed/all', { method: 'DELETE' });
-                        this.fetchData();
-                    } catch (e) {
-                        alert('Clear error: ' + e.message);
-                    }
-                },
-
-                async openModal(job) {
-                    this.selectedJob = job;
-                    this.modalOpen = true;
-                    this.traceJobs = [];
-                    if (job && job.trace_id) {
-                        try {
-                            const res = await fetch(`/chronos/api/trace/${job.trace_id}`);
-                            const data = await res.json();
-                            if (data.status === 'success') {
-                                this.traceJobs = data.data || [];
-                            }
-                        } catch (e) {
-                            console.error('Trace fetch error:', e);
-                        }
-                    }
-                },
-
-                parseTags(jsonStr) {
-                    if (!jsonStr) return [];
-                    try {
-                        const parsed = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr;
-                        return Object.entries(parsed).map(([key, value]) => ({ key, value }));
-                    } catch (e) {
-                        return [];
-                    }
-                },
-
-                formatTime(ts) {
-                    if (!ts) return '-';
-                    const date = new Date(parseFloat(ts) * 1000);
-                    return date.toLocaleTimeString() + ' ' + date.toLocaleDateString();
                 }
+            });
+        },
+
+        updateChart(httpTotal, jobTotal) {
+            if (!this.chart) return;
+            const label = new Date().toLocaleTimeString('en', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            const httpDelta = Math.max(0, httpTotal - this.prevHttpTotal);
+            const jobDelta  = Math.max(0, jobTotal  - this.prevJobTotal);
+            this.prevHttpTotal = httpTotal;
+            this.prevJobTotal  = jobTotal;
+
+            this.chart.data.labels.push(label);
+            this.chart.data.labels.shift();
+            this.chart.data.datasets[0].data.push(httpDelta);
+            this.chart.data.datasets[0].data.shift();
+            this.chart.data.datasets[1].data.push(jobDelta);
+            this.chart.data.datasets[1].data.shift();
+            this.chart.update('none');
+        },
+
+        // ─────────────────────────────────────────────
+        // Fetch methods
+        // ─────────────────────────────────────────────
+        async fetchAll() {
+            this.loading = true;
+            try {
+                const [healthRes] = await Promise.all([
+                    fetch('/chronos/api/health'),
+                ]);
+                const healthData = await healthRes.json();
+                if (healthData.status === 'success') {
+                    this.health = healthData.data;
+                    const httpTotal = this.health.counts?.http_requests || 0;
+                    const jobTotal  = this.health.jobs?.total || 0;
+                    this.updateChart(httpTotal, jobTotal);
+                }
+                // Also fetch current tab data
+                if (this.activeTab === 'http')    await this.fetchHttp();
+                if (this.activeTab === 'queue')   await this.fetchJobs();
+                if (this.activeTab === 'queries') await this.fetchSlowQueries();
+                if (this.activeTab === 'logs')    await this.fetchLogs();
+
+                this.lastUpdated = new Date().toLocaleTimeString();
+            } catch (e) {
+                console.error('[Chronos] fetch error:', e);
+            } finally {
+                this.loading = false;
             }
-        }
-    </script>
+        },
+
+        async fetchHttp() {
+            try {
+                const res  = await fetch(`/chronos/api/http?filter=${this.httpFilter}&limit=100`);
+                const data = await res.json();
+                if (data.status === 'success') this.httpRequests = data.data;
+            } catch (e) { console.error('[Chronos] fetchHttp error:', e); }
+        },
+
+        async fetchJobs() {
+            try {
+                const res  = await fetch(`/chronos/api/jobs?type=${this.jobTab}&limit=100`);
+                const data = await res.json();
+                if (data.status === 'success') this.jobs = data.data;
+            } catch (e) { console.error('[Chronos] fetchJobs error:', e); }
+        },
+
+        async fetchSlowQueries() {
+            try {
+                const res  = await fetch('/chronos/api/slow-queries?limit=100');
+                const data = await res.json();
+                if (data.status === 'success') this.slowQueries = data.data;
+            } catch (e) { console.error('[Chronos] fetchSlowQueries error:', e); }
+        },
+
+        async fetchLogs() {
+            try {
+                const res  = await fetch(`/chronos/api/logs?min_level=${this.logMinLevel}&limit=100`);
+                const data = await res.json();
+                if (data.status === 'success') this.logs = data.data;
+            } catch (e) { console.error('[Chronos] fetchLogs error:', e); }
+        },
+
+        async fetchTrace() {
+            this.traceSpans = [];
+            if (!this.traceId) return;
+            try {
+                const res  = await fetch(`/chronos/api/trace/${this.traceId}`);
+                const data = await res.json();
+                if (data.status === 'success') this.traceSpans = data.data;
+            } catch (e) { console.error('[Chronos] fetchTrace error:', e); }
+        },
+
+        // ─────────────────────────────────────────────
+        // Actions
+        // ─────────────────────────────────────────────
+        async retryJob(id) {
+            try {
+                const res  = await fetch(`/chronos/api/jobs/${id}/retry`, { method: 'POST' });
+                const data = await res.json();
+                alert(data.message || 'Job re-queued!');
+                await this.fetchJobs();
+            } catch (e) { alert('Retry error: ' + e.message); }
+        },
+
+        async batchRetrySelected() {
+            if (!this.selectedIds.length) return;
+            try {
+                const res  = await fetch('/chronos/api/jobs/batch-retry', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: this.selectedIds }) });
+                const data = await res.json();
+                alert(data.message || 'Jobs re-queued!');
+                this.selectedIds = [];
+                await this.fetchJobs();
+            } catch (e) { alert('Batch retry error: ' + e.message); }
+        },
+
+        async batchDeleteSelected() {
+            if (!this.selectedIds.length) return;
+            if (!confirm(`Delete ${this.selectedIds.length} job(s)?`)) return;
+            try {
+                const res  = await fetch('/chronos/api/jobs/batch-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: this.selectedIds }) });
+                const data = await res.json();
+                alert(data.message || 'Jobs deleted!');
+                this.selectedIds = [];
+                await this.fetchJobs();
+            } catch (e) { alert('Batch delete error: ' + e.message); }
+        },
+
+        async clearAllFailed() {
+            if (!confirm('Clear all failed jobs?')) return;
+            try {
+                await fetch('/chronos/api/jobs/failed/all', { method: 'DELETE' });
+                await this.fetchJobs();
+            } catch (e) { alert('Error: ' + e.message); }
+        },
+
+        async clearAllLogs() {
+            if (!confirm('Clear all captured logs?')) return;
+            try {
+                await fetch('/chronos/api/logs', { method: 'DELETE' });
+                await this.fetchLogs();
+            } catch (e) { alert('Error: ' + e.message); }
+        },
+
+        // ─────────────────────────────────────────────
+        // Modals
+        // ─────────────────────────────────────────────
+        async openTraceModal(traceId) {
+            this.traceId = traceId;
+            this.traceSpans = [];
+            this.traceModalOpen = true;
+            await this.fetchTrace();
+        },
+
+        openJobModal(job) {
+            this.selectedJob = job;
+            this.jobModalOpen = true;
+        },
+
+        // ─────────────────────────────────────────────
+        // Job selection helpers
+        // ─────────────────────────────────────────────
+        isAllSelected() {
+            return this.filteredJobs.length > 0 && this.filteredJobs.every(j => this.selectedIds.includes(j.id));
+        },
+
+        toggleSelectAll() {
+            this.selectedIds = this.isAllSelected() ? [] : this.filteredJobs.map(j => j.id);
+        },
+
+        // ─────────────────────────────────────────────
+        // Utilities
+        // ─────────────────────────────────────────────
+        parseTags(jsonStr) {
+            if (!jsonStr) return [];
+            try {
+                const parsed = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr;
+                return Object.entries(parsed).map(([key, value]) => ({ key, value }));
+            } catch { return []; }
+        },
+
+        formatTime(ts) {
+            if (!ts) return '—';
+            const d = new Date(parseFloat(ts) * 1000);
+            if (isNaN(d)) return ts;
+            return d.toLocaleTimeString() + ' · ' + d.toLocaleDateString();
+        },
+
+        formatJson(str) {
+            try { return JSON.stringify(JSON.parse(str), null, 2); }
+            catch { return str; }
+        },
+    };
+}
+</script>
 </body>
 </html>
