@@ -602,7 +602,8 @@
                         'bg-cyan-950/30 border-cyan-800/40 ml-6': span.type === 'db_query',
                         'bg-amber-950/30 border-amber-800/40 ml-6': span.type === 'redis',
                         'bg-emerald-950/30 border-emerald-800/40 ml-6': span.type === 'external',
-                        'bg-indigo-950/30 border-indigo-800/40 ml-4': span.type === 'job' || (!['http','db_query','redis','external'].includes(span.type))
+                        'bg-rose-950/30 border-rose-800/40 ml-6': span.type === 'log',
+                        'bg-indigo-950/30 border-indigo-800/40 ml-4': span.type === 'job' || (!['http','db_query','redis','external','log'].includes(span.type))
                      }">
                     <div class="flex items-center space-x-2 min-w-0">
                         <span class="text-slate-600 font-bold flex-shrink-0" x-text="'#' + (idx + 1)"></span>
@@ -612,11 +613,12 @@
                                 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30': span.type === 'db_query',
                                 'bg-amber-500/20 text-amber-300 border-amber-500/30': span.type === 'redis',
                                 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30': span.type === 'external',
-                                'bg-indigo-500/20 text-indigo-300 border-indigo-500/30': span.type === 'job' || (!['http','db_query','redis','external'].includes(span.type))
+                                'bg-rose-500/20 text-rose-300 border-rose-500/30': span.type === 'log',
+                                'bg-indigo-500/20 text-indigo-300 border-indigo-500/30': span.type === 'job' || (!['http','db_query','redis','external','log'].includes(span.type))
                               }"
-                              x-text="span.type === 'db_query' ? 'SQL' : span.type === 'http' ? 'HTTP' : span.type === 'redis' ? 'REDIS' : span.type === 'external' ? 'EXT' : 'JOB'">
+                              x-text="span.type === 'db_query' ? 'SQL' : span.type === 'http' ? 'HTTP' : span.type === 'redis' ? 'REDIS' : span.type === 'external' ? 'EXT' : span.type === 'log' ? 'LOG' : 'JOB'">
                         </span>
-                        <span class="truncate text-white" x-text="span.job_class || span.sql"></span>
+                        <span class="truncate text-white" x-text="span.job_class || span.sql || span.message"></span>
                         <!-- HTTP status badge -->
                         <template x-if="span.type === 'http' && span.status_code">
                             <span class="px-1.5 py-0.5 rounded text-[9px] font-bold border"
@@ -634,11 +636,13 @@
                         </template>
                     </div>
                     <div class="flex items-center space-x-3 flex-shrink-0 ml-3">
-                        <template x-if="span.type !== 'http'">
+                        <template x-if="span.type !== 'http' && span.type !== 'log'">
                             <span class="text-amber-300 text-[10px]" x-text="span.wait_time_ms ? span.wait_time_ms + 'ms wait' : ''"></span>
                         </template>
-                        <span class="text-emerald-300 text-[10px]" x-text="(span.duration_ms || '0') + 'ms'"></span>
-                        <template x-if="span.type !== 'http'">
+                        <template x-if="span.type !== 'log'">
+                            <span class="text-emerald-300 text-[10px]" x-text="(span.duration_ms || '0') + 'ms'"></span>
+                        </template>
+                        <template x-if="span.type !== 'http' && span.type !== 'log'">
                             <span class="px-1.5 py-0.5 rounded text-[9px] font-bold border uppercase"
                                   :class="{
                                     'bg-emerald-500/10 text-emerald-400 border-emerald-500/20': span.status === 'completed',

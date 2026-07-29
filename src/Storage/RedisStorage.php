@@ -305,8 +305,18 @@ class RedisStorage
                     $httpData['job_class'] = ($httpData['method'] ?? 'HTTP') . ' ' . ($httpData['path'] ?? $httpId);
                     array_unshift($spans, $httpData); // Always first
                 }
+            } elseif (str_starts_with($item, 'log:')) {
+                // Log entry span
+                $logId   = substr($item, 4);
+                $logData = $redis->hGetAll($this->prefix . 'log:' . $logId);
+                if ($logData) {
+                    $logData['type']        = 'log';
+                    $logData['job_class']   = '[' . ($logData['level'] ?? 'LOG') . '] ' . ($logData['message'] ?? '');
+                    $logData['duration_ms'] = '0.00';
+                    $spans[] = $logData;
+                }
             } elseif (str_starts_with($item, 'span:')) {
-                // DB query span
+                // DB / Custom span
                 $spanId   = substr($item, 5);
                 $spanData = $redis->hGetAll($this->prefix . 'span:' . $spanId);
                 if ($spanData) {
@@ -514,6 +524,12 @@ class RedisStorage
         // Level-specific index for filtering
         $redis->zAdd($this->prefix . 'logs:' . strtolower($level), (float) $now, $logId);
         $redis->expire($this->prefix . 'logs:' . strtolower($level), 86400 * 2);
+
+        // Link log entry to trace waterfall if traceId exists
+        if (! empty($traceId)) {
+            $redis->zAdd($this->prefix . 'trace:' . $traceId, (float) $now, 'log:' . $logId);
+            $redis->expire($this->prefix . 'trace:' . $traceId, 86400 * 2);
+        }
 
         $this->trimLogs($redis);
     }
