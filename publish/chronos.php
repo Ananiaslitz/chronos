@@ -93,4 +93,18 @@ return [
         'recent_jobs_limit' => 500,
         'failed_jobs_limit' => 200,
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Real-Time Webhook & Slack Alerts
+    |--------------------------------------------------------------------------
+    | Dispatch JSON webhooks when error rates or failed jobs exceed thresholds.
+    | Compatible with Slack, Discord, Telegram, or custom webhook receivers.
+    */
+    'alerts' => [
+        'enabled'                     => false,
+        'webhook_url'                 => '',
+        'http_error_rate_threshold'  => 5.0,  // % error rate trigger
+        'job_failure_threshold'       => 10,   // total failed jobs trigger
+    ],
 ];

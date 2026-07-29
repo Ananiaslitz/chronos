@@ -292,4 +292,16 @@ class ApiController
             'data'   => $queries,
         ]);
     }
+
+    // =========================================================================
+    // Prometheus Metrics Exporter
+    // =========================================================================
+
+    #[GetMapping(path: '/chronos/metrics')]
+    public function metrics(ResponseInterface $response)
+    {
+        return $response
+            ->withHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
+            ->raw($this->storage->getPrometheusMetrics());
+    }
 }

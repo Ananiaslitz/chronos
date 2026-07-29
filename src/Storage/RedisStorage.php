@@ -642,4 +642,47 @@ class RedisStorage
             ],
         ];
     }
+
+    public function getPrometheusMetrics(): string
+    {
+        $health = $this->getHealth();
+
+        $http   = $health['http'] ?? [];
+        $jobs   = $health['jobs'] ?? [];
+        $counts = $health['counts'] ?? [];
+
+        $lines   = [];
+        $lines[] = '# HELP chronos_http_requests_total Total number of HTTP requests tracked by Chronos.';
+        $lines[] = '# TYPE chronos_http_requests_total counter';
+        $lines[] = sprintf('chronos_http_requests_total %d', (int) ($http['total'] ?? 0));
+
+        $lines[] = '# HELP chronos_http_errors_total Total number of HTTP 4xx and 5xx errors.';
+        $lines[] = '# TYPE chronos_http_errors_total counter';
+        $lines[] = sprintf('chronos_http_errors_total{code="4xx"} %d', (int) ($http['errors_4xx'] ?? 0));
+        $lines[] = sprintf('chronos_http_errors_total{code="5xx"} %d', (int) ($http['errors_5xx'] ?? 0));
+
+        $lines[] = '# HELP chronos_http_request_duration_ms_average Average duration of HTTP requests in ms.';
+        $lines[] = '# TYPE chronos_http_request_duration_ms_average gauge';
+        $lines[] = sprintf('chronos_http_request_duration_ms_average %.2f', (float) ($http['avg_duration_ms'] ?? 0));
+
+        $lines[] = '# HELP chronos_jobs_processed_total Total queue jobs processed by status.';
+        $lines[] = '# TYPE chronos_jobs_processed_total counter';
+        $lines[] = sprintf('chronos_jobs_processed_total{status="completed"} %d', (int) ($jobs['completed'] ?? 0));
+        $lines[] = sprintf('chronos_jobs_processed_total{status="failed"} %d', (int) ($jobs['failed'] ?? 0));
+        $lines[] = sprintf('chronos_jobs_processed_total{status="retried"} %d', (int) ($jobs['retried'] ?? 0));
+
+        $lines[] = '# HELP chronos_jobs_duration_ms_average Average job execution time in ms.';
+        $lines[] = '# TYPE chronos_jobs_duration_ms_average gauge';
+        $lines[] = sprintf('chronos_jobs_duration_ms_average %.2f', (float) ($jobs['avg_duration_ms'] ?? 0));
+
+        $lines[] = '# HELP chronos_slow_queries_total Total database queries flagged as slow.';
+        $lines[] = '# TYPE chronos_slow_queries_total counter';
+        $lines[] = sprintf('chronos_slow_queries_total %d', (int) ($counts['slow_queries'] ?? 0));
+
+        $lines[] = '# HELP chronos_logs_captured_total Total application logs captured in Redis.';
+        $lines[] = '# TYPE chronos_logs_captured_total counter';
+        $lines[] = sprintf('chronos_logs_captured_total %d', (int) ($counts['logs'] ?? 0));
+
+        return implode("\n", $lines) . "\n";
+    }
 }

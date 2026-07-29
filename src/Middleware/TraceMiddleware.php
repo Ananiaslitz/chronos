@@ -34,8 +34,8 @@ class TraceMiddleware implements MiddlewareInterface
             return $handler->handle($request);
         }
 
-        $traceId  = 'http_' . bin2hex(random_bytes(8));
-        $start    = microtime(true);
+        $traceId = $this->extractIncomingTraceId($request);
+        $start   = microtime(true);
 
         // Propagate trace ID into the coroutine context so jobs/queries can correlate
         TraceContext::setTraceId($traceId);
@@ -54,6 +54,30 @@ class TraceMiddleware implements MiddlewareInterface
         $this->maybeRecord($traceId, $request, $statusCode, $durationMs);
 
         return $response->withHeader('X-Chronos-Trace-Id', $traceId);
+    }
+
+    protected function extractIncomingTraceId(ServerRequestInterface $request): string
+    {
+        // 1. Check W3C traceparent header: 00-{traceId}-{spanId}-{flags}
+        if ($request->hasHeader('traceparent')) {
+            $header = $request->getHeaderLine('traceparent');
+            $parts  = explode('-', trim($header));
+            if (count($parts) >= 3 && ! empty($parts[1])) {
+                return 'w3c_' . $parts[1];
+            }
+        }
+
+        // 2. Check X-Chronos-Trace-Id / X-Trace-Id / X-Correlation-Id
+        foreach (['x-chronos-trace-id', 'x-trace-id', 'x-correlation-id'] as $headerName) {
+            if ($request->hasHeader($headerName)) {
+                $val = trim($request->getHeaderLine($headerName));
+                if (! empty($val)) {
+                    return $val;
+                }
+            }
+        }
+
+        return 'http_' . bin2hex(random_bytes(8));
     }
 
     protected function maybeRecord(
