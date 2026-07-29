@@ -69,4 +69,41 @@ class TraceContext
 
         return $job;
     }
+
+    /**
+     * Records a custom span (e.g. db_query, redis, external) into the current trace.
+     */
+    public static function recordSpan(
+        string $type,
+        string $name,
+        float $durationMs = 0.0,
+        array $meta = []
+    ): void {
+        $traceId = self::getTraceId();
+        if (empty($traceId)) {
+            return;
+        }
+
+        try {
+            if (class_exists(\Hyperf\Context\ApplicationContext::class) && \Hyperf\Context\ApplicationContext::hasContainer()) {
+                $container = \Hyperf\Context\ApplicationContext::getContainer();
+                if ($container->has(\Chronos\Storage\RedisStorage::class)) {
+                    $storage = $container->get(\Chronos\Storage\RedisStorage::class);
+                    $spanData = array_merge([
+                        'id'          => $type . '_' . bin2hex(random_bytes(4)),
+                        'job_class'   => $name,
+                        'type'        => $type,
+                        'sql'         => $name,
+                        'duration_ms' => sprintf('%.2f', $durationMs),
+                        'created_at'  => (string) microtime(true),
+                        'status'      => 'completed',
+                    ], $meta);
+
+                    $storage->recordTraceSpan($traceId, $spanData);
+                }
+            }
+        } catch (\Throwable $e) {
+            // Silently ignore
+        }
+    }
 }

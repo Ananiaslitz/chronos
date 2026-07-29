@@ -597,20 +597,24 @@
             </template>
             <template x-for="(span, idx) in traceSpans" :key="span.id || idx">
                 <div class="flex items-center justify-between text-xs font-mono p-3 rounded-xl border transition"
-                     :class="span.type === 'db_query'
-                        ? 'bg-cyan-950/30 border-cyan-800/40 ml-6'
-                        : span.type === 'http'
-                            ? 'bg-violet-950/30 border-violet-800/40'
-                            : 'bg-white/[0.03] border-white/[0.06]'">
+                     :class="{
+                        'bg-violet-950/30 border-violet-800/40': span.type === 'http',
+                        'bg-cyan-950/30 border-cyan-800/40 ml-6': span.type === 'db_query',
+                        'bg-amber-950/30 border-amber-800/40 ml-6': span.type === 'redis',
+                        'bg-emerald-950/30 border-emerald-800/40 ml-6': span.type === 'external',
+                        'bg-indigo-950/30 border-indigo-800/40 ml-4': span.type === 'job' || (!['http','db_query','redis','external'].includes(span.type))
+                     }">
                     <div class="flex items-center space-x-2 min-w-0">
                         <span class="text-slate-600 font-bold flex-shrink-0" x-text="'#' + (idx + 1)"></span>
-                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold flex-shrink-0 border"
+                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold flex-shrink-0 border uppercase"
                               :class="{
-                                'bg-cyan-500/20 text-cyan-300 border-cyan-500/30': span.type === 'db_query',
                                 'bg-violet-500/20 text-violet-300 border-violet-500/30': span.type === 'http',
-                                'bg-indigo-500/20 text-indigo-300 border-indigo-500/30': span.type !== 'db_query' && span.type !== 'http'
+                                'bg-cyan-500/20 text-cyan-300 border-cyan-500/30': span.type === 'db_query',
+                                'bg-amber-500/20 text-amber-300 border-amber-500/30': span.type === 'redis',
+                                'bg-emerald-500/20 text-emerald-300 border-emerald-500/30': span.type === 'external',
+                                'bg-indigo-500/20 text-indigo-300 border-indigo-500/30': span.type === 'job' || (!['http','db_query','redis','external'].includes(span.type))
                               }"
-                              x-text="span.type === 'db_query' ? 'SQL' : span.type === 'http' ? 'HTTP' : 'JOB'">
+                              x-text="span.type === 'db_query' ? 'SQL' : span.type === 'http' ? 'HTTP' : span.type === 'redis' ? 'REDIS' : span.type === 'external' ? 'EXT' : 'JOB'">
                         </span>
                         <span class="truncate text-white" x-text="span.job_class || span.sql"></span>
                         <!-- HTTP status badge -->
