@@ -29,13 +29,13 @@ Chronos is a zero-external-dependency observability platform built specifically 
 Install the package via Composer:
 
 ```bash
-composer require dhsa/chronos
+composer require ananiaslitz/chronos
 ```
 
 Publish the configuration file:
 
 ```bash
-php bin/hyperf.php vendor:publish dhsa/chronos
+php bin/hyperf.php vendor:publish ananiaslitz/chronos
 ```
 
 ---
